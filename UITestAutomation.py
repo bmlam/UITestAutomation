@@ -32,6 +32,7 @@ import re
 import shutil
 import subprocess 
 import sys 
+import tempfile 
 import time 
 
 g_screenshotsBakRoot=  os.path.join( os.environ[ 'HOME' ] , 'Desktop',  'TestAuto_screenshots' )
@@ -120,7 +121,7 @@ def getListOfLangsAndDevicesFromFile(filePath):
 
 	return devs, langs
 
-def performBuild ( projectDir, buildOutputDir, doClean = True ):
+def performBuild ( appName, projectDir, buildOutputDir, doClean = True ):
 	""" A wrapper around `xcodebuild` that tells it to build the app in the temp
 	directory. If your app uses workspaces or special schemes, you'll need to
 	specify them here.
@@ -134,10 +135,12 @@ def performBuild ( projectDir, buildOutputDir, doClean = True ):
 
 	cmdArgs = [ 'xcodebuild'
 		, '-sdk', 'iphonesimulator'
+		, '-scheme', appName
 		, 'CONFIGURATION_BUILD_DIR=' + buildOutputDir
-		, 'PRODUCT_NAME=' + 'app'
+		# , 'PRODUCT_NAME=' + 'app'
 		]
 
+	appPath = os.path.join( buildOutputDir, appName )
 	
 	if doClean: 
 		_infoTs( "Building with __clean__ ..." , True )
@@ -146,12 +149,38 @@ def performBuild ( projectDir, buildOutputDir, doClean = True ):
 		_infoTs( "Building without __clean__ ..."  )
 	cmdArgs.append( 'build' )
 
-	_dbx( "cmnd: %s" % " ".join( cmdArgs ) )
-	_dbx( "returning without calling xcodebuild" ); 			return
+	_dbx( "Running: %s" % " ".join( cmdArgs ) )
 
 	savedDir = os.getcwd()
 	os.chdir( projectDir )
-	subprocess.check_call ( cmdArgs )
+	# subprocess.check_call ( cmdArgs )
+
+	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+	msgLines, errLines= proc.communicate( )
+
+	buildStdoutPath = tempfile.mktemp()
+	outF = open( buildStdoutPath, "w" )
+	_infoTs( "Piping xcodebuild stdout to '%s' " % buildStdoutPath )
+	outF.write( msgLines )
+	outF.close( )
+
+	_infoTs( "Run 'ls -l %s' to verify app has been built ok! Or fix me to show the file mod time" % appPath )
+
+	if len( errLines ) > 0 :
+		_infoTs( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
+
+		buildStderrPath = tempfile.mktemp()
+		errF = open( buildStderrPath, "w" )
+		_infoTs( "****************** Piping xcodebuild stderr to '%s'" % ( buildStderrPath ) )
+		errF.write( errLines )
+		errF.close( )
+
+		answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
+		if answer == 'yes':
+			None # back to common path
+		else:
+			_errorExit( "Script aborted on demand" )
+
 	os.chdir( savedDir )
 
 def mkdir ( path ):
@@ -244,7 +273,8 @@ def main():
 	_infoTs( 'Will iterate over these lang(s) : \t%s' % '; '.join( langs ) )
 	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
 
-	performBuild( argObject.projectRoot, argObject.buildTestOutputDir, argObject.cleanSwitch )
+	performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
+		, buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
 
 	for dev in devs:
 		for lang in langs:
