@@ -1,0 +1,18 @@
+#lang:en-US
+lang:de-DE
+
+#dev:iPad 2 (10.0)
+#dev:iPad Air (10.0)
+#dev:iPad Air 2 (10.0)
+#dev:iPad Pro (10.0)
+#dev:iPad Retina (10.0)
+#dev:iPhone 4s (10.0)
+#dev:iPhone 5 (10.0)
+dev:iPhone 5s (10.0)
+#dev:iPhone 6 (10.0)
+#dev:iPhone 6 Plus (10.0)
+#dev:iPhone 6s (10.0) [A6903AF8-6914-4E1A-B230-2FDE28786C29]
+#dev:iPhone 6s (10.0) + Apple Watch - 38mm (2.2)
+#dev:iPhone 6s Plus (10.0)
+#dev:iPhone 6s Plus (10.0) + Apple Watch - 42mm (2.2)
+

@@ -35,8 +35,7 @@ import sys
 import time 
 
 g_screenshotsBakRoot=  os.path.join( os.environ[ 'HOME' ] , 'Desktop',  'TestAuto_screenshots' )
-g_bundleDir			= "" # set later
-g_traceResultsDir	= "" # set later
+g_buildTestOutputDefaultRoot	= os.path.join( "/tmp", "UITestAutomatationOutput" )
 
 g_cntDisplayed = 0
 
@@ -54,14 +53,17 @@ def _errorExit ( text ):
     sys.exit(1)
 
 def parseCmdLine() :
-	buildOutputLoc	= os.path.join( "/tmp", "UITestAutomatationOutput" )
 
 	parser = argparse.ArgumentParser()
 	# lowercase shortkeys
 
-	parser.add_argument( '-o', '--BuildTestOutput', help='build and test output location for xcodebuild', default= buildOutputLoc )
-	parser.add_argument( '-p', '--project_dir', help='Top level directory where xcode project file resides', default = '..' )
-	parser.add_argument( '-s', '--screenshotsArchiveRoot', help='root location for screenshots. Subfolders based on device and lang will be created', default=g_screenshotsBakRoot )
+	parser.add_argument( '-a', '--appName', help='normally this is the prefix of the main ".xcodeproj" file', required= True )
+	parser.add_argument( '-o', '--buildTestOutputDir'
+		, help='build and test output location for xcodebuild. Will default to "%s" + AppName supplied' % g_buildTestOutputDefaultRoot	
+		)
+	parser.add_argument( '-p', '--projectRoot', help='Top level directory where xcode project file resides', default = '..' )
+	parser.add_argument( '-s', '--screenshotsArchiveRoot'
+		, help='root location for screenshots. Subfolders based on appName, device and lang will be created', default=g_screenshotsBakRoot )
 
 	cleanSwithGroup = parser.add_mutually_exclusive_group(required=False)
 	cleanSwithGroup.add_argument('-C', '--clean', dest='cleanSwitch', action='store_true')
@@ -70,11 +72,10 @@ def parseCmdLine() :
 
 	result= parser.parse_args()
 
-	global g_bundleDir
-	g_bundleDir			= "%s/app.app" %  buildOutputLoc
-
 	for (k, v) in vars( result ).iteritems () : _dbx( "%s : %s" % (k, v) )
 
+	# derive settings
+	if result.buildTestOutputDir == None:  result.buildTestOutputDir = os.path.join( g_buildTestOutputDefaultRoot, result.appName )
 	return result
 
 def getListOfLangsAndDevicesFromFile(filePath):
@@ -145,8 +146,8 @@ def performBuild ( projectDir, buildOutputDir, doClean = True ):
 		_infoTs( "Building without __clean__ ..."  )
 	cmdArgs.append( 'build' )
 
-	_debug( "cmnd: %s" % cmdArgs.join(" ") )
-	_debug( "returning without calling xcodebuild" ); 			return
+	_dbx( "cmnd: %s" % " ".join( cmdArgs ) )
+	_dbx( "returning without calling xcodebuild" ); 			return
 
 	savedDir = os.getcwd()
 	os.chdir( projectDir )
@@ -174,26 +175,30 @@ def rmdirAskConditionally( path, dirUsage ):
 
 def assertScreenshotsBackupRoot ( path ):
 	if os.path.isdir( path ):
-		answer = raw_input( "Directory '%s' already exists. Enter 'yes' to proceed for removal or anything else to abort: " % path )
-		if answer == 'yes':
-			shutil.rmtree( path )
+		nodesInDir = os.listdir( path )
+		_infoTs( "Directory '%s' for backup of screenshots already exists. Checking it content.." % path )
+		if len( nodesInDir ) == 0:
+			_infoTs( "Ok, directory is empty. Processing will continue" )
+			return
 		else:
-			_errorExit( 'Script aborted.')
+			_infoTs( "The directory has %d nodes. Examples: %s" % ( len( nodesInDir ), ';'.join( nodesInDir[0:3] ) ) )
+			answer = raw_input( "Enter 'yes' to proceed for removal or anything else to abort: " )
+			if answer == 'yes':
+				shutil.rmtree( path )
+			else:
+				_errorExit( 'Script aborted.')
 			
 	mkdir( path )
 
 def backupScreenshots( srcRoot, tgtRoot, lang, dev ):
 	"""
-    Since we always clear out the trace results before every run, we can
-    assume that any screenshots were saved in the "Run 1" directory. Copy them
-    to the screenshotsBackupLoc's language folder!
 	"""
 	tgtDir = os.path.join( tgtRoot, makeExpandFriendlyPath( dev ), lang )
 	mkdir( tgtDir )
 
 	cntFiles = 0
 	cntRotated = 0
-	srcDir = os.path.join( srcRoot, 'Run 1' )
+	srcDir = srcRoot
 	_dbx( "Copying png files from '%s' to '%s' ..." % ( srcDir, tgtDir ) )
 	for file in glob.glob( srcDir + '/*.png' ):
 		if file.find( 'landscape' ) >= 0 :
@@ -207,9 +212,26 @@ def makeExpandFriendlyPath( string ):
 	# replace round brackets characters and space with underscore
 	return re.sub(  '[\(\) ]', '_', string )
 
+def deployAppToDeviceAndSetLang( lang, dev ):
+	"""
+	Since we do not know another way to change the language setting of the Simulator, the next best
+	approach seems to be setting the language for the app, and this seems to be possible only while we
+	are deploying it
+	"""
+
+def startUITestTarget( lang, dev, outputDir ):
+	"""
+	Sofar I only know how to call xcodebuild to build the app and test target and run the test target.
+	I have seen that the language set for the app previously using "xcrun " does get persisted in the Simulator.
+	It is indeed stupid to build again but until I know a more efficient way, I have to put up with
+	this monkey solution.
+	"""
+
 def main():
 	scriptBasename = os.path.basename( __file__ )
 	argObject = parseCmdLine()
+
+	_infoTs( "Build and test output dir will be '%s'" % argObject.buildTestOutputDir )
 
 	screenshotsArchiveRoot = argObject.screenshotsArchiveRoot 
 
@@ -222,14 +244,16 @@ def main():
 	_infoTs( 'Will iterate over these lang(s) : \t%s' % '; '.join( langs ) )
 	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
 
-	performBuild( argObject.project_dir, argObject.BuildTestOutput, argObject.cleanSwitch )
+	performBuild( argObject.projectRoot, argObject.buildTestOutputDir, argObject.cleanSwitch )
 
 	for dev in devs:
 		for lang in langs:
 
 			deployAppToDeviceAndSetLang( lang= lang, dev= dev )
-			startUITestTarget( outputDir= outputDir )
-			backupScreenshots( sourceDir= sourceDir, targetDir= backupDir, lang= lang, dev= dev )
+			startUITestTarget( outputDir= argObject.buildTestOutputDir, lang= lang, dev= dev )
+
+			pngSourceDir = "/Users/bmlam/Temp/ManyTimes/Screenshots"
+			backupScreenshots( srcRoot= pngSourceDir, tgtRoot= g_screenshotsBakRoot, lang= lang, dev= dev )
 
 			_infoTs( "Done with simulator %s and lang %s" % ( dev, lang ) )
 
