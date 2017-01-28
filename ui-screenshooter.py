@@ -1,5 +1,10 @@
 #!/usr/bin/python
 
+import sys 
+
+sys.stdout.write( "this script has been renamed to UITestAutomation.py and further development continues there" )
+sys.exit(1)
+
 """
 A python rewrite of Jonathan Penn's screenshooter for test automation
 Task perform by this script:
@@ -18,7 +23,6 @@ import os
 import re
 import shutil
 import subprocess 
-import sys 
 import time 
 
 g_screenshotsBakRoot=  os.path.join( os.environ[ 'HOME' ] , 'Desktop',  'TestAuto_screenshots' )
