@@ -22,6 +22,16 @@ In practice in my test and trial approach the current sequence is chosen sicne i
 
 Some coding convention to bear in mind:
 	assignment: always leave space to both side of = to be consistent with swift. Named argument in method calls may be exception
+
+	useful commands:
+		xcrun instruments -s devices # show available devices
+		xcrun simctl boot <device>   # boots a device but we do not see the Simulator popping up! Just internal state set to booted
+		xcrun simctl install <device> <app bundle path>  # installs the app but does not seem to open an Simulator app
+		xcrun simctl launch <device> <app name in reverse URL notation>  # prints the pid of the app process on Mac but no Simulator GUI!
+
+	One way to bring up the Simulator GUI of the targeted device is Simulator -> Hardware -> <choose dvice>. Doing so may return the error message: "device already booted" so we need to "simctl shutdown <device>" first.
+	So if "simctl launch" is decoupled from the Simulator GUI, does it mean we could test devices in parallel?
+
 """
 
 import argparse 
@@ -69,7 +79,7 @@ def parseCmdLine() :
 	cleanSwithGroup = parser.add_mutually_exclusive_group(required=False)
 	cleanSwithGroup.add_argument('-C', '--clean', dest='cleanSwitch', action='store_true')
 	cleanSwithGroup.add_argument('-c', '--no-clean', dest='cleanSwitch', action='store_false')
-	parser.set_defaults(cleanSwitch=True)
+	parser.set_defaults(cleanSwitch= False)
 
 	result= parser.parse_args()
 
@@ -121,7 +131,7 @@ def getListOfLangsAndDevicesFromFile(filePath):
 
 	return devs, langs
 
-def performBuild ( appName, projectDir, buildOutputDir, doClean = True ):
+def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 	""" A wrapper around `xcodebuild` that tells it to build the app in the temp
 	directory. If your app uses workspaces or special schemes, you'll need to
 	specify them here.
@@ -140,7 +150,7 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = True ):
 		# , 'PRODUCT_NAME=' + 'app'
 		]
 
-	appPath = os.path.join( buildOutputDir, appName )
+	appPath = os.path.join( buildOutputDir, appName + '.app' )
 	
 	if doClean: 
 		_infoTs( "Building with __clean__ ..." , True )
@@ -156,23 +166,29 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = True ):
 	# subprocess.check_call ( cmdArgs )
 
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
-	msgLines, errLines= proc.communicate( )
+	stdOutput, errOutput= proc.communicate( )
+
+	outLines = stdOutput.split( "\n" )
+	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
 
 	buildStdoutPath = tempfile.mktemp()
 	outF = open( buildStdoutPath, "w" )
-	_infoTs( "Piping xcodebuild stdout to '%s' " % buildStdoutPath )
-	outF.write( msgLines )
+	_infoTs( "***************** Piping xcodebuild stdout to '%s' " % buildStdoutPath )
+	outF.write( stdOutput )
 	outF.close( )
+
 
 	_infoTs( "Run 'ls -l %s' to verify app has been built ok! Or fix me to show the file mod time" % appPath )
 
-	if len( errLines ) > 0 :
+	if len( errOutput ) > 0 :
+		errLines = errOutput.split( "\n" )
+		_dbx( "lines in stderr: %d" % len( errLines ) )
 		_infoTs( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
 
 		buildStderrPath = tempfile.mktemp()
 		errF = open( buildStderrPath, "w" )
 		_infoTs( "****************** Piping xcodebuild stderr to '%s'" % ( buildStderrPath ) )
-		errF.write( errLines )
+		errF.write( errOutput )
 		errF.close( )
 
 		answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
