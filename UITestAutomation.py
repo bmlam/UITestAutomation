@@ -150,7 +150,7 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 		# , 'PRODUCT_NAME=' + 'app'
 		]
 
-	appPath = os.path.join( buildOutputDir, appName + '.app' )
+	bundlePath = os.path.join( buildOutputDir, appName + '.app' )
 	
 	if doClean: 
 		_infoTs( "Building with __clean__ ..." , True )
@@ -178,7 +178,7 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 	outF.close( )
 
 
-	_infoTs( "Run 'ls -l %s' to verify app has been built ok! Or fix me to show the file mod time" % appPath )
+	_infoTs( "Run 'ls -l %s' to verify app has been built ok! Or fix me to show the file mod time" % bundlePath )
 
 	if len( errOutput ) > 0 :
 		errLines = errOutput.split( "\n" )
@@ -198,6 +198,8 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 			_errorExit( "Script aborted on demand" )
 
 	os.chdir( savedDir )
+
+	return bundlePath
 
 def mkdir ( path ):
     try:
@@ -257,12 +259,30 @@ def makeExpandFriendlyPath( string ):
 	# replace round brackets characters and space with underscore
 	return re.sub(  '[\(\) ]', '_', string )
 
-def deployAppToDeviceAndSetLang( lang, dev ):
+def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
 	"""
 	Since we do not know another way to change the language setting of the Simulator, the next best
 	approach seems to be setting the language for the app, and this seems to be possible only while we
 	are deploying it
 	"""
+	# we may need to shutdown the device first !
+	cmdArgs = [ 'xcrun', 'simctl' 
+		, 'install', dev, bundlePath 
+		, 'AppleLanguages', lang
+		]
+	_dbx( "Running: %s" % " ".join( cmdArgs ) )
+
+	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+	stdOutput, errOutput= proc.communicate( )
+
+	outLines = stdOutput.split( "\n" )
+	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
+
+	if len( errOutput ) > 0 :
+		errLines = errOutput.split( "\n" )
+		_infoTs( "lines in stderr: %d" % len( errLines ) )
+
+		_errorExit( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
 
 def startUITestTarget( lang, dev, outputDir ):
 	"""
@@ -289,13 +309,15 @@ def main():
 	_infoTs( 'Will iterate over these lang(s) : \t%s' % '; '.join( langs ) )
 	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
 
-	performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
+	bundlePath= performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
 		, buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
+	if bundlePath == None:
+		_errorExit( "No bundle path returned!" )
 
 	for dev in devs:
 		for lang in langs:
 
-			deployAppToDeviceAndSetLang( lang= lang, dev= dev )
+			deployAppToDeviceAndSetLang( lang= lang, dev= dev, bundlePath= bundlePath )
 			startUITestTarget( outputDir= argObject.buildTestOutputDir, lang= lang, dev= dev )
 
 			pngSourceDir = "/Users/bmlam/Temp/ManyTimes/Screenshots"
