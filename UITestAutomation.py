@@ -34,6 +34,7 @@ Some coding convention to bear in mind:
 
 """
 
+import calendar 
 import argparse 
 import glob 
 import inspect 
@@ -177,8 +178,11 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 	outF.write( stdOutput )
 	outF.close( )
 
-
-	_infoTs( "Run 'ls -l %s' to verify app has been built ok! Or fix me to show the file mod time" % bundlePath )
+	bundleModTimeSecs = fileModTimeAs( path= bundlePath, format= 'SecondsSinceEpoch' )
+	currentSecs = calendar.timegm( time.gmtime() )
+	secsDelta = currentSecs - bundleModTimeSecs 
+	_infoTs( "Bundle '%s' built at %f and now is %f. Delta is %d" % ( bundlePath, bundleModTimeSecs, currentSecs, secsDelta ) ) 
+	secsTolerance = 3
 
 	if len( errOutput ) > 0 :
 		errLines = errOutput.split( "\n" )
@@ -191,11 +195,14 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 		errF.write( errOutput )
 		errF.close( )
 
-		answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
-		if answer == 'yes':
-			None # back to common path
+		if secsDelta < secsTolerance : 
+			_infoTs( "We continue since delta in seconds is less than %d" % secsTolerance )
 		else:
-			_errorExit( "Script aborted on demand" )
+			answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
+			if answer == 'yes':
+				None # back to common path
+			else:
+				_errorExit( "Script aborted on demand" )
 
 	os.chdir( savedDir )
 
@@ -259,13 +266,68 @@ def makeExpandFriendlyPath( string ):
 	# replace round brackets characters and space with underscore
 	return re.sub(  '[\(\) ]', '_', string )
 
+def fileModTimeAs ( path, format ): 
+	"""return modification time as in desired format
+	"""
+	if not os.path.exists( path ):
+		_errorExit( "Node %s does not exists" % path )
+
+	gmtime = os.path.getmtime( path )
+	if format == 'SecondsSinceEpoch': # consider string constants for formats!
+		return gmtime
+	elif format == 'Components':
+		_errorExit( "Format %s is not _yet_ supported" % format )
+	else:
+		_errorExit( "Format %s is not supported" % format )
+
+def bootDevice( dev ):
+	"""
+	"""
+	cmdArgs = [ 'xcrun', 'simctl' 
+		, 'boot', dev
+		]
+	_dbx( "Running: %s" % " ".join( cmdArgs ) )
+
+	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+	stdOutput, errOutput= proc.communicate( )
+
+	outLines = stdOutput.split( "\n" )
+	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
+
+	if len( errOutput ) > 0 :
+		errLines = errOutput.split( "\n" )
+		_infoTs( "lines in stderr: %d" % len( errLines ) )
+
+		_errorExit( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
+
+def shutdownDevice( dev ):
+	"""
+	"""
+	cmdArgs = [ 'xcrun', 'simctl' 
+		, 'shutdown', dev
+		]
+	_dbx( "Running: %s" % " ".join( cmdArgs ) )
+
+	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+	stdOutput, errOutput= proc.communicate( )
+
+	outLines = stdOutput.split( "\n" )
+	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
+
+	if len( errOutput ) > 0 :
+		errLines = errOutput.split( "\n" )
+		_infoTs( "lines in stderr: %d" % len( errLines ) )
+
+		# _errorExit( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
+
 def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
 	"""
 	Since we do not know another way to change the language setting of the Simulator, the next best
 	approach seems to be setting the language for the app, and this seems to be possible only while we
 	are deploying it
 	"""
-	# we may need to shutdown the device first !
+	shutdownDevice( dev ) # shutdown the device first to get a defined state!
+	bootDevice( dev ) 
 	cmdArgs = [ 'xcrun', 'simctl' 
 		, 'install', dev, bundlePath 
 		, 'AppleLanguages', lang
