@@ -202,7 +202,7 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 			if answer == 'yes':
 				None # back to common path
 			else:
-				_errorExit( "Script aborted on demand" )
+				_errorExit( "Script aborted on request" )
 
 	os.chdir( savedDir )
 
@@ -330,7 +330,7 @@ def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
 	bootDevice( dev ) 
 	cmdArgs = [ 'xcrun', 'simctl' 
 		, 'install', dev, bundlePath 
-		, 'AppleLanguages', lang
+		, '-AppleLanguages', lang
 		]
 	_dbx( "Running: %s" % " ".join( cmdArgs ) )
 
@@ -346,13 +346,59 @@ def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
 
 		_errorExit( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
 
-def startUITestTarget( lang, dev, outputDir ):
+def fileTextAndLog2Console( text, consoleMsgPrefix, outPath= None ):
+	if outPath == None:
+		outPath = tempfile.mktemp()
+	outF = open( outPut, "w" )
+	_infoTs( "%s '%s'" % ( consoleMsgPrefix, outPath ) )
+	outF.write( text )
+	outF.close( )
+
+def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 	"""
 	Sofar I only know how to call xcodebuild to build the app and test target and run the test target.
 	I have seen that the language set for the app previously using "xcrun " does get persisted in the Simulator.
 	It is indeed stupid to build again but until I know a more efficient way, I have to put up with
 	this monkey solution.
 	"""
+
+	savedDir = os.getcwd(); os.chdir( projectDir )
+
+	shutdownDevice( dev ) # since xcodebuild complained about dev in booted state
+	cmdArgs = [ 'xcodebuild', 'test' 
+				,'-target',  appName + 'Tests'
+	   			,'-derivedDataPath', outputDir
+				,'-scheme',  appName 
+           		,'-sdk', 'iphonesimulator' 
+           		,'-destination', 'platform=iOS Simulator,OS=10.2,name=%s' % dev
+		]
+	_infoTs( "Running: %s" % " ".join( cmdArgs ), True )
+
+	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+	stdOutput, errOutput= proc.communicate( )
+
+	outLines = stdOutput.split( "\n" )
+	if len( outLines ) > 0:
+		_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) , True )
+	else:
+		_infoTs( "Stdout from test is empty", True )
+
+	if len( errLines ) > 0:
+		errLines = errOutput.split( "\n" )
+		_infoTs( "lines in stderr: %s" % ( '\n'.join( errLines[ -50: ] ) ) )
+
+		devPretty= makeExpandFriendlyPath( dev )
+		langPretty= makeExpandFriendlyPath( lang )
+		outPath= os.path.join( outputDir, "UITest_StdERR__%s_%s" % ( devPretty, langPretty ) )
+		fileTextAndLog2Console( text= stdOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= outPath )
+
+		answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
+		if answer == 'yes':
+			None # back to common path
+		else:
+			_errorExit( "Script aborted on request" )
+
+	os.chdir( savedDir )
 
 def main():
 	scriptBasename = os.path.basename( __file__ )
@@ -380,7 +426,9 @@ def main():
 		for lang in langs:
 
 			deployAppToDeviceAndSetLang( lang= lang, dev= dev, bundlePath= bundlePath )
-			startUITestTarget( outputDir= argObject.buildTestOutputDir, lang= lang, dev= dev )
+			startUITestTarget( projectDir= argObject.projectRoot
+				, outputDir= argObject.buildTestOutputDir
+				, lang= lang, dev= dev, appName= argObject.appName )
 
 			pngSourceDir = "/Users/bmlam/Temp/ManyTimes/Screenshots"
 			backupScreenshots( srcRoot= pngSourceDir, tgtRoot= g_screenshotsBakRoot, lang= lang, dev= dev )
