@@ -64,6 +64,14 @@ def _errorExit ( text ):
     sys.stderr.write( 'ERROR raised from %s - Ln %d: %s\n' % ( inspect.stack()[1][3], inspect.stack()[1][2], text ) ) 
     sys.exit(1)
 
+def shortenConsoleOutput ( text, isStderr, showLines ):
+	lines = text.split( "\n" )
+	if len( lines ) > 0:
+		callerLine = inspect.stack()[1][2]
+		callerName = inspect.stack()[1][3]
+		sys.stdout.write( "** ShortenedConsoleOutput: last %d (of %d) lines from caller %s at Line %d: \n%s" % 
+			( showLines, len( lines ) , callerName, callerLine, lines[ -showLines: ] ) ) 
+
 def parseCmdLine() :
 
 	parser = argparse.ArgumentParser()
@@ -198,11 +206,15 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 		if secsDelta < secsTolerance : 
 			_infoTs( "We continue since delta in seconds is less than %d" % secsTolerance )
 		else:
-			answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
-			if answer == 'yes':
-				None # back to common path
-			else:
-				_errorExit( "Script aborted on request" )
+			if True: 
+				_infoTs( "Ignoring error from xcodebuild during script development/test!!!" )
+			else: 
+				answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
+				if answer == 'yes':
+					None # back to common path
+				else:
+					_errorExit( "Script aborted on request" )
+
 
 	os.chdir( savedDir )
 
@@ -227,7 +239,7 @@ def rmdirAskConditionally( path, dirUsage ):
 	else:
 		_dbx( "'%s' does not exist" % path )
 
-def assertScreenshotsBackupRoot ( path ):
+def assertScreenshotsBackupDir ( path ):
 	if os.path.isdir( path ):
 		nodesInDir = os.listdir( path )
 		_infoTs( "Directory '%s' for backup of screenshots already exists. Checking it content.." % path )
@@ -244,11 +256,9 @@ def assertScreenshotsBackupRoot ( path ):
 			
 	mkdir( path )
 
-def backupScreenshots( srcRoot, tgtRoot, lang, dev ):
+def backupScreenshots( srcRoot, tgtDir ):
 	"""
 	"""
-	tgtDir = os.path.join( tgtRoot, makeExpandFriendlyPath( dev ), lang )
-	mkdir( tgtDir )
 
 	cntFiles = 0
 	cntRotated = 0
@@ -291,12 +301,10 @@ def bootDevice( dev ):
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
 
-	outLines = stdOutput.split( "\n" )
-	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
+	shortenConsoleOutput ( text= stdOutput, isStderr= False, showLines= 2 )
 
 	if len( errOutput ) > 0 :
-		errLines = errOutput.split( "\n" )
-		_infoTs( "lines in stderr: %d" % len( errLines ) )
+		shortenConsoleOutput ( text= errOutput, isStderr= True, showLines= 10 )
 
 		_errorExit( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
 
@@ -311,14 +319,30 @@ def shutdownDevice( dev ):
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
 
+	shortenConsoleOutput ( text= stdOutput, isStderr= False, showLines= 2 )
+
+	if len( errOutput ) > 0 :
+		shortenConsoleOutput ( text= stdOutput, isStderr= True, showLines= 4 )
+		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "shutdownDevice stderr saved to", outPath= None )
+
+def closeSimulatorApp():
+	"""
+	"""
+	cmdArgs = [ 'osascript'
+		, '-e', 'tell app "Simulator" to quit'
+		]
+	_dbx( "Running: %s" % " ".join( cmdArgs ) )
+
+	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+	stdOutput, errOutput= proc.communicate( )
+
 	outLines = stdOutput.split( "\n" )
-	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
+	if outLines > 0: _infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -3: ] ) ) )
 
 	if len( errOutput ) > 0 :
 		errLines = errOutput.split( "\n" )
-		_infoTs( "lines in stderr: %d" % len( errLines ) )
-
-		# _errorExit( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
+		_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -3: ] ) ) )
+		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr saved to", outPath= None )
 
 def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
 	"""
@@ -349,7 +373,7 @@ def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
 def fileTextAndLog2Console( text, consoleMsgPrefix, outPath= None ):
 	if outPath == None:
 		outPath = tempfile.mktemp()
-	outF = open( outPut, "w" )
+	outF = open( outPath, "w" )
 	_infoTs( "%s '%s'" % ( consoleMsgPrefix, outPath ) )
 	outF.write( text )
 	outF.close( )
@@ -383,14 +407,14 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 	else:
 		_infoTs( "Stdout from test is empty", True )
 
+	errLines = errOutput.split( "\n" )
 	if len( errLines ) > 0:
-		errLines = errOutput.split( "\n" )
-		_infoTs( "lines in stderr: %s" % ( '\n'.join( errLines[ -50: ] ) ) )
+		_infoTs( "lines in stderr: %s" % ( '\n'.join( errLines[ -20: ] ) ) )
 
 		devPretty= makeExpandFriendlyPath( dev )
 		langPretty= makeExpandFriendlyPath( lang )
 		outPath= os.path.join( outputDir, "UITest_StdERR__%s_%s" % ( devPretty, langPretty ) )
-		fileTextAndLog2Console( text= stdOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= outPath )
+		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= outPath )
 
 		answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
 		if answer == 'yes':
@@ -408,32 +432,42 @@ def main():
 
 	screenshotsArchiveRoot = argObject.screenshotsArchiveRoot 
 
-	# we check dir backup directory at this early stage so not too time is wasted when user does
-	# want to keep the content of the target directory
-	assertScreenshotsBackupRoot ( screenshotsArchiveRoot )
-	_infoTs( "Screenshots will be backed up to '%s'" % screenshotsArchiveRoot )
+	_infoTs( "Screenshots for all device and lang pairing will be backed up to '%s'" % screenshotsArchiveRoot )
 
 	devs, langs = getListOfLangsAndDevicesFromFile ( './listOfLangsAndDevices.txt' )
 	_infoTs( 'Will iterate over these lang(s) : \t%s' % '; '.join( langs ) )
 	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
 
-	bundlePath= performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
-		, buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
-	if bundlePath == None:
-		_errorExit( "No bundle path returned!" )
-
+	if True:
+		bundlePath= performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
+			, buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
+		if bundlePath == None:
+			_errorExit( "No bundle path returned!" )
+	else:
+		_infoTs( "skipped build to shortcut test!!" )
 	for dev in devs:
 		for lang in langs:
 
-			deployAppToDeviceAndSetLang( lang= lang, dev= dev, bundlePath= bundlePath )
+			if True:
+				deployAppToDeviceAndSetLang( lang= lang, dev= dev, bundlePath= bundlePath )
+			else:
+				_infoTs( "skipped Deploying App to shortcut test!!" )
+
 			startUITestTarget( projectDir= argObject.projectRoot
 				, outputDir= argObject.buildTestOutputDir
 				, lang= lang, dev= dev, appName= argObject.appName )
 
-			pngSourceDir = "/Users/bmlam/Temp/ManyTimes/Screenshots"
-			backupScreenshots( srcRoot= pngSourceDir, tgtRoot= g_screenshotsBakRoot, lang= lang, dev= dev )
+			devPretty= makeExpandFriendlyPath( dev )
+			langPretty= makeExpandFriendlyPath( lang )
+			pngTargetDir = os.path.join( screenshotsArchiveRoot, "%s_%s" % ( devPretty, langPretty ) )
+			# give user a chance to keep the content of the target directory
+			assertScreenshotsBackupDir ( pngTargetDir )
+
+			pngSourceDir = "/Users/bmlam/Temp/ManyTimes/Screenshots"  # this is hardwired in swift test program
+			backupScreenshots( srcRoot= pngSourceDir, tgtDir= pngTargetDir )
 
 			_infoTs( "Done with simulator %s and lang %s" % ( dev, lang ) )
+			closeSimulatorApp()
 
 	_infoTs( "\n\n%s completed normally." % scriptBasename , True )
 			
