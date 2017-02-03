@@ -28,6 +28,7 @@ Some coding convention to bear in mind:
 		xcrun simctl boot <device>   # boots a device but we do not see the Simulator popping up! Just internal state set to booted
 		xcrun simctl install <device> <app bundle path>  # installs the app but does not seem to open an Simulator app
 		xcrun simctl launch <device> <app name in reverse URL notation>  # prints the pid of the app process on Mac but no Simulator GUI!
+		xcrun simctl list # list all simulator somehow existing, but also status of valid devices!
 
 	One way to bring up the Simulator GUI of the targeted device is Simulator -> Hardware -> <choose dvice>. Doing so may return the error message: "device already booted" so we need to "simctl shutdown <device>" first.
 	So if "simctl launch" is decoupled from the Simulator GUI, does it mean we could test devices in parallel?
@@ -48,6 +49,8 @@ import time
 
 g_screenshotsBakRoot=  os.path.join( os.environ[ 'HOME' ] , 'Desktop',  'TestAuto_screenshots' )
 g_buildTestOutputDefaultRoot	= os.path.join( "/tmp", "UITestAutomatationOutput" )
+g_userHome= os.path.expanduser( '~' )
+g_errlogDir	= os.path.join( g_userHome, "UITestAutomatation_ErrorLogs" )
 
 g_cntDisplayed = 0
 
@@ -56,21 +59,35 @@ def _dbx ( text ):
 
 def _infoTs ( text, withTS = False ):
 	if withTS:
-		print( '%s (Ln %d) %s' % ( time.strftime("%H:%M:%S"), inspect.stack()[1][2], text ) )
+		print( '\n%s (Ln %d) %s' % ( time.strftime("%H:%M:%S"), inspect.stack()[1][2], text ) )
 	else :
-		print( 'INFO (Ln %d) %s' % ( inspect.stack()[1][2], text ) )
+		print( '\nINFO (Ln %d) %s' % ( inspect.stack()[1][2], text ) )
 
 def _errorExit ( text ):
-    sys.stderr.write( 'ERROR raised from %s - Ln %d: %s\n' % ( inspect.stack()[1][3], inspect.stack()[1][2], text ) ) 
+    sys.stderr.write( '\nERROR raised from %s - Ln %d: %s\n' % ( inspect.stack()[1][3], inspect.stack()[1][2], text ) ) 
     sys.exit(1)
 
-def shortenConsoleOutput ( text, isStderr, showLines ):
+def handleConsoleOutput ( text, isStderr, showLines, abortOnError= False ):
+	if isStderr: type = 'stderr' 
+	else: type = 'stdout'
+	callerLine = inspect.stack()[1][2]
+	callerName = inspect.stack()[1][3]
+
 	lines = text.split( "\n" )
-	if len( lines ) > 0:
-		callerLine = inspect.stack()[1][2]
-		callerName = inspect.stack()[1][3]
-		sys.stdout.write( "** ShortenedConsoleOutput: last %d (of %d) lines from caller %s at Line %d: \n%s" % 
-			( showLines, len( lines ) , callerName, callerLine, lines[ -showLines: ] ) ) 
+	realLineCnt = 0
+	for line in lines:
+		if line.strip() != line: realLineCnt += 1
+	if  realLineCnt > 0 :
+		sys.stdout.write( "** ShortenedConsoleOutput: last %d (of %d) %s lines from caller %s at Line %d: \n%s" % 
+			( showLines, len( lines ), type, callerName, callerLine, lines[ -showLines: ] ) ) 
+		if isStderr:
+			path = os.path.join( g_errlogDir, 'ErrorFrom_%s_Ln%d.log' % ( callerName, callerLine ) )
+			fileTextAndLog2Console( text= text, consoleMsgPrefix= "Error output automatically saved to", outPath= path )
+			if abortOnError:
+				_errorExit( "Aborted since error is flagged as error" ) 
+
+	else:
+		sys.stdout.write( "** ShortenedConsoleOutput: %s from caller %s at Line %d is empty!\n\n" % ( type, callerName, callerLine ) )
 
 def parseCmdLine() :
 
@@ -221,10 +238,13 @@ def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
 	return bundlePath
 
 def mkdir ( path ):
-    try:
-        os.makedirs(path)
-    except OSError as exc:  # Python >2.5
-		raise
+	if os.path.isdir( path ):
+		return
+	else:
+	    try:
+	        os.makedirs(path)
+	    except OSError as exc:  # Python >2.5
+			raise
  
 def rmdirAskConditionally( path, dirUsage ):
 	if os.path.isdir( path ):
@@ -301,12 +321,10 @@ def bootDevice( dev ):
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
 
-	shortenConsoleOutput ( text= stdOutput, isStderr= False, showLines= 2 )
+	handleConsoleOutput ( text= stdOutput, isStderr= False, showLines= 2 )
 
 	if len( errOutput ) > 0 :
-		shortenConsoleOutput ( text= errOutput, isStderr= True, showLines= 10 )
-
-		_errorExit( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
+		handleConsoleOutput ( text= errOutput, isStderr= True, showLines= 10 ) 
 
 def shutdownDevice( dev ):
 	"""
@@ -319,10 +337,10 @@ def shutdownDevice( dev ):
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
 
-	shortenConsoleOutput ( text= stdOutput, isStderr= False, showLines= 2 )
+	handleConsoleOutput ( text= stdOutput, isStderr= False, showLines= 2 )
 
 	if len( errOutput ) > 0 :
-		shortenConsoleOutput ( text= stdOutput, isStderr= True, showLines= 4 )
+		handleConsoleOutput ( text= stdOutput, isStderr= True, showLines= 4 )
 		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "shutdownDevice stderr saved to", outPath= None )
 
 def closeSimulatorApp():
@@ -361,9 +379,7 @@ def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
 
-	outLines = stdOutput.split( "\n" )
-	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
-
+	handleConsoleOutput ( text= stdOutput, isStderr= False, showLines= 3 )
 	if len( errOutput ) > 0 :
 		errLines = errOutput.split( "\n" )
 		_infoTs( "lines in stderr: %d" % len( errLines ) )
@@ -401,15 +417,10 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
 
-	outLines = stdOutput.split( "\n" )
-	if len( outLines ) > 0:
-		_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) , True )
-	else:
-		_infoTs( "Stdout from test is empty", True )
+	handleConsoleOutput ( text= stdOutput, isStderr= False, showLines= 20 )
 
-	errLines = errOutput.split( "\n" )
-	if len( errLines ) > 0:
-		_infoTs( "lines in stderr: %s" % ( '\n'.join( errLines[ -20: ] ) ) )
+	if len( errOutput ) > 0:
+		handleConsoleOutput ( text= errOutput, isStderr= False, showLines= 10, abortOnError= True ) # fixme: test abortOnError
 
 		devPretty= makeExpandFriendlyPath( dev )
 		langPretty= makeExpandFriendlyPath( lang )
@@ -424,12 +435,16 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 
 	os.chdir( savedDir )
 
+def setup():
+	mkdir( g_errlogDir )	
+
 def main():
 	scriptBasename = os.path.basename( __file__ )
 	argObject = parseCmdLine()
 
-	_infoTs( "Build and test output dir will be '%s'" % argObject.buildTestOutputDir )
+	setup()
 
+	_infoTs( "Build and test output dir will be '%s'" % argObject.buildTestOutputDir )
 	screenshotsArchiveRoot = argObject.screenshotsArchiveRoot 
 
 	_infoTs( "Screenshots for all device and lang pairing will be backed up to '%s'" % screenshotsArchiveRoot )
