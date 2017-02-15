@@ -1,0 +1,1 @@
+./UITestAutomation.py -a ManyTimes -p /Users/bmlam/Dropbox/my-apps/ManyTimes -C --schemeFile ManyTimes.xcodeproj/xcuserdata/bmlam.xcuserdatad/xcschemes/ManyTimes.xcscheme

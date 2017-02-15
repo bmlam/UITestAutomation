@@ -102,6 +102,9 @@ def parseCmdLine() :
 	parser.add_argument( '-s', '--screenshotsArchiveRoot'
 		, help='root location for screenshots. Subfolders based on appName, device and lang will be created', default=g_screenshotsBakRoot )
 
+	# long argument names from here
+	parser.add_argument( '--schemeFile', help='relative path of the apps scheme file from projectRoot', required= True )
+
 	cleanSwithGroup = parser.add_mutually_exclusive_group(required=False)
 	cleanSwithGroup.add_argument('-C', '--clean', dest='cleanSwitch', action='store_true')
 	cleanSwithGroup.add_argument('-c', '--no-clean', dest='cleanSwitch', action='store_false')
@@ -113,6 +116,8 @@ def parseCmdLine() :
 
 	# derive settings
 	if result.buildTestOutputDir == None:  result.buildTestOutputDir = os.path.join( g_buildTestOutputDefaultRoot, result.appName )
+	if result.schemeFile != None:  result.schemeFile = os.path.join( result.projectRoot, result.schemeFile ) # not so nice, fixme
+
 	return result
 
 def getListOfLangsAndDevicesFromFile(filePath):
@@ -435,6 +440,42 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 
 	os.chdir( savedDir )
 
+def setLangTerrInScheme( schemeFilePath ) :
+	"""
+	One way to configure the language and territory locale for the app under test is by setting the parent 
+	environment variables of the app. By way of XCode: Product -> Scheme -> EditScheme -> Environment.
+	By script, we have to edit the scheme xml file of the app under test.
+	Either way, the environment is also passed to the the testing app.
+
+	-- the scheme file is xml. Look for this example and replace TARGET_LANG
+
+      <CommandLineArguments>
+         <CommandLineArgument
+            argument = "-UIViewLayoutFeedbackLoopDebuggingThreshold 100"
+            isEnabled = "YES">
+         </CommandLineArgument>
+      </CommandLineArguments>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "TARGET_LANG"
+            value = "it-IT"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+
+	Note more environment variables may follow so we do not show the end tag for CommandLineArguments
+	"""
+	# read the file as a single string so regexp search works better
+	inFH = open( schemeFilePath, 'r' )
+	read
+	content = inFH.read() # read as string
+	inFH.close()
+	# save the original to tmp and emit its path
+	backupPath = tempfile.mktemp()
+	shutil.copy( schemeFilePath, backupPath )
+	_dbx( "Scheme file backed up to %s" % backupPath )
+	# write back to the modified scheme file
+	return backupPath
+
 def setup():
 	mkdir( g_errlogDir )	
 
@@ -454,6 +495,9 @@ def main():
 	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
 
 	if True:
+		backupFile= setLangTerrInScheme( schemeFilePath= argObject.schemeFile ) 
+
+		_errorExit( "Test exit. Do diff %s %s" % ( backupFile, argObject.schemeFile ) )
 		bundlePath= performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
 			, buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
 		if bundlePath == None:
