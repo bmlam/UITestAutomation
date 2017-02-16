@@ -367,7 +367,7 @@ def closeSimulatorApp():
 		_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -3: ] ) ) )
 		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr saved to", outPath= None )
 
-def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
+def deployAppToDevice( dev, bundlePath ):
 	"""
 	Since we do not know another way to change the language setting of the Simulator, the next best
 	approach seems to be setting the language for the app, and this seems to be possible only while we
@@ -377,7 +377,6 @@ def deployAppToDeviceAndSetLang( lang, dev, bundlePath ):
 	bootDevice( dev ) 
 	cmdArgs = [ 'xcrun', 'simctl' 
 		, 'install', dev, bundlePath 
-		, '-AppleLanguages', lang
 		]
 	_dbx( "Running: %s" % " ".join( cmdArgs ) )
 
@@ -440,7 +439,7 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 
 	os.chdir( savedDir )
 
-def setLangTerrInScheme( schemeFilePath ) :
+def setLangTerrInScheme( schemeFilePath, langTerr ) :
 	"""
 	One way to configure the language and territory locale for the app under test is by setting the parent 
 	environment variables of the app. By way of XCode: Product -> Scheme -> EditScheme -> Environment.
@@ -449,31 +448,48 @@ def setLangTerrInScheme( schemeFilePath ) :
 
 	-- the scheme file is xml. Look for this example and replace TARGET_LANG
 
-      <CommandLineArguments>
-         <CommandLineArgument
-            argument = "-UIViewLayoutFeedbackLoopDebuggingThreshold 100"
-            isEnabled = "YES">
-         </CommandLineArgument>
-      </CommandLineArguments>
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "TARGET_LANG"
-            value = "it-IT"
-            isEnabled = "YES">
-         </EnvironmentVariable>
+      <EnvironmentVariables>     <-- 1
+         <EnvironmentVariable    <-- 2
+            key = "TARGET_LANG"  <-- 3
+            value = "it-IT"      <-- 4A 4B
+            isEnabled = "YES">   <-- 5
+         </EnvironmentVariable>  <-- 6
 
 	Note more environment variables may follow so we do not show the end tag for CommandLineArguments
 	"""
 	# read the file as a single string so regexp search works better
 	inFH = open( schemeFilePath, 'r' )
-	read
-	content = inFH.read() # read as string
+	contentOld = inFH.read() # read as string
+	# myNewLineToken = " <UIAuto-NL#Trick> " # contentOld = contentOld.replace( "\n", myNewLineToken )
+	n = 100
+	_dbx( "First %d chars of file %s:\n***\n%s" % ( n, schemeFilePath, contentOld[ : n ] ) )
 	inFH.close()
+	#                       |-->  2          <--|   |-->     3            <--|> 4A  <   | -->   4B   <--|
+	#pattern = r'(^.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=)("[a-z]2-[A-Z]+")(.*$)'
+	pattern =  r'^(.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=\s*)("[a-z]{2}-[A-Z]+")(.*$)'
+	match = re.match( pattern, contentOld, re.DOTALL )
+	if match == None:
+
+		_errorExit( "Could not find pattern '%s' in xml text of scheme file" % pattern )
+
+	head = match.group(1)
+	currLangFound  = match.group(2)
+	tail = match.group(3)
+	_dbx( "currLangFound: %s" % currLangFound )
+
+	# contentNew = re.sub( pattern , r'\1\2"' + langTerr + '"' + r'\4', contentOld )
+	contentNew = head + '"' + langTerr + '"' + tail
+	if contentNew == contentOld:
+		_infoTs( "Did not replace target language in scheme file. Possible reason: the target language is already configured?" )
 	# save the original to tmp and emit its path
 	backupPath = tempfile.mktemp()
 	shutil.copy( schemeFilePath, backupPath )
 	_dbx( "Scheme file backed up to %s" % backupPath )
 	# write back to the modified scheme file
+	outFH = open( schemeFilePath, 'w' )
+	outFH.write( contentNew ) 
+	outFH.close()
+
 	return backupPath
 
 def setup():
@@ -494,10 +510,8 @@ def main():
 	_infoTs( 'Will iterate over these lang(s) : \t%s' % '; '.join( langs ) )
 	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
 
-	if True:
-		backupFile= setLangTerrInScheme( schemeFilePath= argObject.schemeFile ) 
+	if False:
 
-		_errorExit( "Test exit. Do diff %s %s" % ( backupFile, argObject.schemeFile ) )
 		bundlePath= performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
 			, buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
 		if bundlePath == None:
@@ -508,7 +522,10 @@ def main():
 		for lang in langs:
 
 			if True:
-				deployAppToDeviceAndSetLang( lang= lang, dev= dev, bundlePath= bundlePath )
+				backupFile= setLangTerrInScheme( schemeFilePath= argObject.schemeFile, langTerr= lang ) 
+				_errorExit( "Test exit. Do diff %s %s" % ( backupFile, argObject.schemeFile ) )
+
+				deployAppToDevice( dev= dev, bundlePath= bundlePath )
 			else:
 				_infoTs( "skipped Deploying App to shortcut test!!" )
 
