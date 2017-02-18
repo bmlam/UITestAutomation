@@ -433,8 +433,8 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 		outPath= os.path.join( outputDir, "UITest_StdERR__%s_%s" % ( devPretty, langPretty ) )
 		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= outPath )
 
-		answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
-		if answer == 'yes':
+		answer = raw_input( "Continue processing? Enter 'y' to proceed or anything else to abort: " )
+		if answer == 'y':
 			None # back to common path
 		else:
 			_errorExit( "Script aborted on request" )
@@ -506,6 +506,14 @@ def setup():
 	mkdir( g_errlogDir )	
 
 def main():
+
+	testFH = open( '/Users/bmlam/Dropbox/git_clones/UITestAutomation/xcb_test_output.log', 'r' )
+	testText = testFH.read()
+	testFH.close( )
+	if checkXcbAllTestsPassed( xcbStdout = testText ): _dbx( "ok" )
+
+	_errorExit( "test exit" )
+
 	scriptBasename = os.path.basename( __file__ )
 	argObject = parseCmdLine()
 
@@ -557,5 +565,31 @@ def main():
 
 	_infoTs( "\n\n%s completed normally." % scriptBasename , True )
 			
-main()
+def checkXcbAllTestsPassed( xcbStdout ):
+	"""
+	Look for the string 
+Test Suite 'All tests' passed at 2017-02-18 18:12:45.605.
+Executed 1 test, with 0 failures (0 unexpected) in 12.504 (12.507) seconds
 
+	return True when found else False
+	Ideally we should also extract the passing timestamp and verify that it is recent. But that is for later
+	"""
+	_dbx( "got lines: %d" % xcbStdout.count( "\n" ) )
+	#groups      1                                         2                                    3                                                                               45
+	pattern = r"^(.*\s+)(Test Suite 'All tests' passed at )(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\.)\s+(Executed \d+ test, with 0 failures \(\d+ unexpected\) in .* seconds\s)(.*$)" 
+	match = re.match( pattern, xcbStdout, re.DOTALL )
+
+	if match == None:
+		_dbx( "Did not find pattern: %s" % pattern )
+		return False
+
+	head1 = match.group(2)
+	passTimestamp = match.group(3)
+	trail1 = match.group(4)
+
+	_dbx( "passTimestamp: %s" % passTimestamp )
+	_infoTs( "Success message from xcodebuild:\n%s%s\n%s" % ( head1, passTimestamp, trail1 ) )
+
+	return True
+	
+main()

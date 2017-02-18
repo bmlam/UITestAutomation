@@ -1,0 +1,17 @@
+application 0x600000168a00: {{0.0, 0.0}, {375.0, 667.0}}, label: 'ManyTimes'
+Query chain:
+Find: Target Application 0x6100000** TEST SUCCEEDED **
+  Output: {
+    Application 0x600000168a00: {{0.0, 0.0}, {375.0, 667.0}}, label: 'ManyTimes'
+  }
+
+Screenshot saved: /Users/bmlam/Temp/ManyTimes/Screenshots/IsThisAlertReSound.png
+Screenshot saved: /Users/bmlam/Temp/ManyTimes/Screenshots/ShouldBeNewAlertSound.png
+    t =    12.30s     Tear Down
+Test Case '-[ManyTimesUITests.ManyTimesUITests test003_AddNewTimer]' passed (12.504 seconds).
+Test Suite 'ManyTimesUITests' passed at 2017-02-18 18:12:45.604.
+Executed 1 test, with 0 failures (0 unexpected) in 12.504 (12.505) seconds
+Test Suite 'ManyTimesUITests.xctest' passed at 2017-02-18 18:12:45.605.
+Executed 1 test, with 0 failures (0 unexpected) in 12.504 (12.506) seconds
+Test Suite 'All tests' passed at 2017-02-18 18:12:45.605.
+Executed 1 test, with 0 failures (0 unexpected) in 12.504 (12.507) seconds
