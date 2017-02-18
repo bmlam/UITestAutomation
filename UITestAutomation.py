@@ -87,7 +87,7 @@ def handleConsoleOutput ( text, isStderr, showLines, abortOnError= False ):
 				_errorExit( "Aborted since error is flagged as error" ) 
 
 	else:
-		sys.stdout.write( "** ShortenedConsoleOutput: %s from caller %s at Line %d is empty!\n\n" % ( type, callerName, callerLine ) )
+		sys.stdout.write( "** ShortenedConsoleOutput: %s from caller %s at Line %d is empty!\n" % ( type, callerName, callerLine ) )
 
 def parseCmdLine() :
 
@@ -420,24 +420,30 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 		]
 	_infoTs( "Running: %s" % " ".join( cmdArgs ), True )
 
+	devPretty= makeExpandFriendlyPath( dev )
+	langPretty= makeExpandFriendlyPath( lang )
+
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
 
-	handleConsoleOutput ( text= stdOutput, isStderr= False, showLines= 20 )
+	outPath= os.path.join( outputDir, "UITest_StdOUT__%s_%s" % ( devPretty, langPretty ) )
+	fileTextAndLog2Console( text= stdOutput, consoleMsgPrefix= "Stdout of xcodebuild saved to", outPath= outPath )
 
-	if len( errOutput ) > 0:
-		handleConsoleOutput ( text= errOutput, isStderr= False, showLines= 10, abortOnError= True ) # fixme: test abortOnError
+	if checkXcbAllTestsPassed( xcbStdout = stdOutput ): 
+		_infoTs( " *** Combo ___%s -- %s___ passed test ****" % ( lang ,dev ) )
+	else:
 
-		devPretty= makeExpandFriendlyPath( dev )
-		langPretty= makeExpandFriendlyPath( lang )
-		outPath= os.path.join( outputDir, "UITest_StdERR__%s_%s" % ( devPretty, langPretty ) )
-		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= outPath )
-
-		answer = raw_input( "Continue processing? Enter 'y' to proceed or anything else to abort: " )
-		if answer == 'y':
-			None # back to common path
-		else:
-			_errorExit( "Script aborted on request" )
+		if len( errOutput ) > 0:
+			handleConsoleOutput ( text= errOutput, isStderr= False, showLines= 10, abortOnError= True ) # fixme: test abortOnError
+	
+			outPath= os.path.join( outputDir, "UITest_StdERR__%s_%s" % ( devPretty, langPretty ) )
+			fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= outPath )
+	
+			answer = raw_input( "Continue processing? Enter 'y' to proceed or anything else to abort: " )
+			if answer == 'y':
+				None # back to common path
+			else:
+				_errorExit( "Script aborted on request" )
 
 	os.chdir( savedDir )
 
@@ -466,13 +472,12 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
 
 		For simplicity, we do not support the format with language code only. 
 	"""
-	_dbx( "langTerr: %s" % langTerr )
+	# _dbx( "langTerr: %s" % langTerr )
 	# read the file as a single string so regexp search works better
 	inFH = open( schemeFilePath, 'r' )
 	contentOld = inFH.read() # read as string
 	# myNewLineToken = " <UIAuto-NL#Trick> " # contentOld = contentOld.replace( "\n", myNewLineToken )
-	n = 100
-	_dbx( "First %d chars of file %s:\n***\n%s" % ( n, schemeFilePath, contentOld[ : n ] ) )
+	# n = 100; _dbx( "First %d chars of file %s:\n***\n%s" % ( n, schemeFilePath, contentOld[ : n ] ) )
 	inFH.close()
 	#                       |-->  2          <--|   |-->     3            <--|> 4A  <   | -->   4B   <--|
 	#pattern = r'(^.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=)("[a-z]2-[A-Z]+")(.*$)'
@@ -485,7 +490,7 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
 	head = match.group(1)
 	currLangFound  = match.group(2)
 	tail = match.group(3)
-	_dbx( "currLangFound: %s" % currLangFound )
+	# _dbx( "currLangFound: %s" % currLangFound )
 
 	# contentNew = re.sub( pattern , r'\1\2"' + langTerr + '"' + r'\4', contentOld )
 	contentNew = head + '"' + langTerr + '"' + tail
@@ -494,7 +499,7 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
 	# save the original to tmp and emit its path
 	backupPath = tempfile.mktemp()
 	shutil.copy( schemeFilePath, backupPath )
-	_dbx( "Scheme file backed up to %s" % backupPath )
+	_infoTs( "Scheme file backed up to %s" % backupPath )
 	# write back to the modified scheme file
 	outFH = open( schemeFilePath, 'w' )
 	outFH.write( contentNew ) 
@@ -505,14 +510,36 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
 def setup():
 	mkdir( g_errlogDir )	
 
+def checkXcbAllTestsPassed( xcbStdout ):
+	"""
+	Look for the string 
+Test Suite 'All tests' passed at 2017-02-18 18:12:45.605.
+Executed 1 test, with 0 failures (0 unexpected) in 12.504 (12.507) seconds
+
+	return True when found else False
+	Ideally we should also extract the passing timestamp and verify that it is recent. But that is for later
+	"""
+	_dbx( "got lines: %d" % xcbStdout.count( "\n" ) )
+	#groups      1                                         2                                    3                                                                               45
+	pattern = r"^(.*\s+)(Test Suite 'All tests' passed at )(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\.)\s+(Executed \d+ test, with 0 failures \(\d+ unexpected\) in .* seconds\s)(.*$)" 
+	match = re.match( pattern, xcbStdout, re.DOTALL )
+
+	if match == None:
+		_dbx( "Did not find pattern: %s" % pattern )
+		return False
+
+	head1 = match.group(2)
+	passTimestamp = match.group(3)
+	trail1 = match.group(4)
+
+	_dbx( "passTimestamp: %s" % passTimestamp )
+	_infoTs( "Success message from xcodebuild:\n%s%s\n%s" % ( head1, passTimestamp, trail1 ) )
+
+	return True
+
 def main():
 
-	testFH = open( '/Users/bmlam/Dropbox/git_clones/UITestAutomation/xcb_test_output.log', 'r' )
-	testText = testFH.read()
-	testFH.close( )
-	if checkXcbAllTestsPassed( xcbStdout = testText ): _dbx( "ok" )
-
-	_errorExit( "test exit" )
+	startTime= time.strftime("%H:%M:%S")
 
 	scriptBasename = os.path.basename( __file__ )
 	argObject = parseCmdLine()
@@ -521,6 +548,7 @@ def main():
 
 	_infoTs( "Build and test output dir will be '%s'" % argObject.buildTestOutputDir )
 	screenshotsArchiveRoot = argObject.screenshotsArchiveRoot 
+	assertScreenshotsBackupDir ( screenshotsArchiveRoot )
 
 	_infoTs( "Screenshots for all device and lang pairing will be backed up to '%s'" % screenshotsArchiveRoot )
 
@@ -529,12 +557,11 @@ def main():
 	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
 
 	if True:
+		closeSimulatorApp()
 
-		bundlePath= performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
-			, buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
-		if bundlePath == None:
-
-			_errorExit( "No bundle path returned!" )
+		# bundlePath= performBuild( appName= argObject.appName , projectDir= argObject.projectRoot , buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
+		# if bundlePath == None:
+		#	_errorExit( "No bundle path returned!" )
 		# deployAppToDevice( dev= dev, bundlePath= bundlePath )
 	else:
 		_infoTs( "skipped build to shortcut test!!" )
@@ -563,33 +590,6 @@ def main():
 			_infoTs( "Done with simulator %s and lang %s" % ( dev, lang ) )
 			closeSimulatorApp()
 
-	_infoTs( "\n\n%s completed normally." % scriptBasename , True )
-			
-def checkXcbAllTestsPassed( xcbStdout ):
-	"""
-	Look for the string 
-Test Suite 'All tests' passed at 2017-02-18 18:12:45.605.
-Executed 1 test, with 0 failures (0 unexpected) in 12.504 (12.507) seconds
-
-	return True when found else False
-	Ideally we should also extract the passing timestamp and verify that it is recent. But that is for later
-	"""
-	_dbx( "got lines: %d" % xcbStdout.count( "\n" ) )
-	#groups      1                                         2                                    3                                                                               45
-	pattern = r"^(.*\s+)(Test Suite 'All tests' passed at )(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\.)\s+(Executed \d+ test, with 0 failures \(\d+ unexpected\) in .* seconds\s)(.*$)" 
-	match = re.match( pattern, xcbStdout, re.DOTALL )
-
-	if match == None:
-		_dbx( "Did not find pattern: %s" % pattern )
-		return False
-
-	head1 = match.group(2)
-	passTimestamp = match.group(3)
-	trail1 = match.group(4)
-
-	_dbx( "passTimestamp: %s" % passTimestamp )
-	_infoTs( "Success message from xcodebuild:\n%s%s\n%s" % ( head1, passTimestamp, trail1 ) )
-
-	return True
+	_infoTs( "\n\n%s completed normally. StartTime was %s" % ( scriptBasename, startTime) , True )
 	
 main()

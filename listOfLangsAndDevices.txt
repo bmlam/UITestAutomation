@@ -1,9 +1,11 @@
 #lang:en_US
-#lang:de_DE
+lang:de_DE
 lang:fr_FR
 
-# dev:iPad 2
-# dev:iPad Air
+#NOT AVAILABLE as of 2017.02.18:       dev:iPad 2
+
+dev:iPad Air
+
 #dev:iPad Air 2 (10.2)
 #dev:iPad Pro (10.2)
 #dev:iPad Retina (10.2)
