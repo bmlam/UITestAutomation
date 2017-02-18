@@ -369,6 +369,8 @@ def closeSimulatorApp():
 
 def deployAppToDevice( dev, bundlePath ):
 	"""
+	FIXME: this method is probably no longer needed since setting App language is achieved by other means
+
 	Since we do not know another way to change the language setting of the Simulator, the next best
 	approach seems to be setting the language for the app, and this seems to be possible only while we
 	are deploying it
@@ -451,12 +453,20 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
       <EnvironmentVariables>     <-- 1
          <EnvironmentVariable    <-- 2
             key = "TARGET_LANG"  <-- 3
-            value = "it-IT"      <-- 4A 4B
+            value = "it_IT"      <-- 4A 4B
             isEnabled = "YES">   <-- 5
          </EnvironmentVariable>  <-- 6
 
 	Note more environment variables may follow so we do not show the end tag for CommandLineArguments
+	Note: the format of locale id is structured as follows:
+		per https://developer.apple.com/library/prerelease/content/documentation/MacOSX/Conceptual/BPInternational/LanguageandLocaleIDs/LanguageandLocaleIDs.html or "Internationalization and Localization Guide"
+		<language code in lower case> e.g. de, fr
+		<language designator in lower case>_<region designator in upper case> e.g. en_US, en_GB
+		<language designator in lower case>-<script designator in upper case> e.g. zh-Hans
+
+		For simplicity, we do not support the format with language code only. 
 	"""
+	_dbx( "langTerr: %s" % langTerr )
 	# read the file as a single string so regexp search works better
 	inFH = open( schemeFilePath, 'r' )
 	contentOld = inFH.read() # read as string
@@ -466,7 +476,7 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
 	inFH.close()
 	#                       |-->  2          <--|   |-->     3            <--|> 4A  <   | -->   4B   <--|
 	#pattern = r'(^.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=)("[a-z]2-[A-Z]+")(.*$)'
-	pattern =  r'^(.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=\s*)("[a-z]{2}-[A-Z]+")(.*$)'
+	pattern =  r'^(.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=\s*)("[a-z]{2}[_-][A-Z]+")(.*$)'
 	match = re.match( pattern, contentOld, re.DOTALL )
 	if match == None:
 
@@ -510,12 +520,14 @@ def main():
 	_infoTs( 'Will iterate over these lang(s) : \t%s' % '; '.join( langs ) )
 	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
 
-	if False:
+	if True:
 
 		bundlePath= performBuild( appName= argObject.appName , projectDir= argObject.projectRoot
 			, buildOutputDir= argObject.buildTestOutputDir , doClean= argObject.cleanSwitch )
 		if bundlePath == None:
+
 			_errorExit( "No bundle path returned!" )
+		# deployAppToDevice( dev= dev, bundlePath= bundlePath )
 	else:
 		_infoTs( "skipped build to shortcut test!!" )
 	for dev in devs:
@@ -523,9 +535,7 @@ def main():
 
 			if True:
 				backupFile= setLangTerrInScheme( schemeFilePath= argObject.schemeFile, langTerr= lang ) 
-				_errorExit( "Test exit. Do diff %s %s" % ( backupFile, argObject.schemeFile ) )
 
-				deployAppToDevice( dev= dev, bundlePath= bundlePath )
 			else:
 				_infoTs( "skipped Deploying App to shortcut test!!" )
 
