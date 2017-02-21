@@ -103,6 +103,7 @@ def parseCmdLine() :
 		, help='root location for screenshots. Subfolders based on appName, device and lang will be created', default=g_screenshotsBakRoot )
 
 	# long argument names from here
+	parser.add_argument( '--langDevFile', help='full path of the file listing languages and devices to test', required= True )
 	parser.add_argument( '--schemeFile', help='relative path of the apps scheme file from projectRoot', required= True )
 
 	cleanSwithGroup = parser.add_mutually_exclusive_group(required=False)
@@ -123,6 +124,7 @@ def parseCmdLine() :
 def getListOfLangsAndDevicesFromFile(filePath):
 	"""Decompose the file content into list of languages and device types 
 	"""
+	_infoTs( "Reading languages and devices to test from %s" % filePath )
 
 	fieldSep = ':'
 	langLiteral = 'lang'
@@ -162,85 +164,85 @@ def getListOfLangsAndDevicesFromFile(filePath):
 
 	return devs, langs
 
-def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
-	""" A wrapper around `xcodebuild` that tells it to build the app in the temp
-	directory. If your app uses workspaces or special schemes, you'll need to
-	specify them here.
-	
-	Use `man xcodebuild` for more information on how to build your project.
-	"""
-
-	xcworkspaceFiles = glob.glob( '%s/*.xcworkspace' % projectDir )
-	if len( xcworkspaceFiles ) > 0 :
-		_errorExit ( "Found at least one xcworkspace files in '%s'. Building with xcworkspace is not yet supported!" % projectDir )
-
-	cmdArgs = [ 'xcodebuild'
-		, '-sdk', 'iphonesimulator'
-		, '-scheme', appName
-		, 'CONFIGURATION_BUILD_DIR=' + buildOutputDir
-		# , 'PRODUCT_NAME=' + 'app'
-		]
-
-	bundlePath = os.path.join( buildOutputDir, appName + '.app' )
-	
-	if doClean: 
-		_infoTs( "Building with __clean__ ..." , True )
-		cmdArgs.append( 'clean' )
-	else :
-		_infoTs( "Building without __clean__ ..."  )
-	cmdArgs.append( 'build' )
-
-	_dbx( "Running: %s" % " ".join( cmdArgs ) )
-
-	savedDir = os.getcwd()
-	os.chdir( projectDir )
-	# subprocess.check_call ( cmdArgs )
-
-	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
-	stdOutput, errOutput= proc.communicate( )
-
-	outLines = stdOutput.split( "\n" )
-	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
-
-	buildStdoutPath = tempfile.mktemp()
-	outF = open( buildStdoutPath, "w" )
-	_infoTs( "***************** Piping xcodebuild stdout to '%s' " % buildStdoutPath )
-	outF.write( stdOutput )
-	outF.close( )
-
-	bundleModTimeSecs = fileModTimeAs( path= bundlePath, format= 'SecondsSinceEpoch' )
-	currentSecs = calendar.timegm( time.gmtime() )
-	secsDelta = currentSecs - bundleModTimeSecs 
-	_infoTs( "Bundle '%s' built at %f and now is %f. Delta is %d" % ( bundlePath, bundleModTimeSecs, currentSecs, secsDelta ) ) 
-	secsTolerance = 3
-
-	if len( errOutput ) > 0 :
-		errLines = errOutput.split( "\n" )
-		_dbx( "lines in stderr: %d" % len( errLines ) )
-		_infoTs( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
-
-		buildStderrPath = tempfile.mktemp()
-		errF = open( buildStderrPath, "w" )
-		_infoTs( "****************** Piping xcodebuild stderr to '%s'" % ( buildStderrPath ) )
-		errF.write( errOutput )
-		errF.close( )
-
-		if secsDelta < secsTolerance : 
-			_infoTs( "We continue since delta in seconds is less than %d" % secsTolerance )
-		else:
-			if True: 
-				_infoTs( "Ignoring error from xcodebuild during script development/test!!!" )
-			else: 
-				answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
-				if answer == 'yes':
-					None # back to common path
-				else:
-					_errorExit( "Script aborted on request" )
-
-
-	os.chdir( savedDir )
-
-	return bundlePath
+#def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
+#	""" A wrapper around `xcodebuild` that tells it to build the app in the temp
+#	directory. If your app uses workspaces or special schemes, you'll need to
+#	specify them here.
+#	
+#	Use `man xcodebuild` for more information on how to build your project.
+#	"""
+#
+#	xcworkspaceFiles = glob.glob( '%s/*.xcworkspace' % projectDir )
+#	if len( xcworkspaceFiles ) > 0 :
+#		_errorExit ( "Found at least one xcworkspace files in '%s'. Building with xcworkspace is not yet supported!" % projectDir )
+#
+#	cmdArgs = [ 'xcodebuild'
+#		, '-sdk', 'iphonesimulator'
+#		, '-scheme', appName
+#		, 'CONFIGURATION_BUILD_DIR=' + buildOutputDir
+#		# , 'PRODUCT_NAME=' + 'app'
+#		]
+#
+#	bundlePath = os.path.join( buildOutputDir, appName + '.app' )
+#	
+#	if doClean: 
+#		_infoTs( "Building with __clean__ ..." , True )
+#		cmdArgs.append( 'clean' )
+#	else :
+#		_infoTs( "Building without __clean__ ..."  )
+#	cmdArgs.append( 'build' )
+#
+#	_dbx( "Running: %s" % " ".join( cmdArgs ) )
+#
+#	savedDir = os.getcwd()
+#	os.chdir( projectDir )
+#	# subprocess.check_call ( cmdArgs )
+#
+#	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+#	stdOutput, errOutput= proc.communicate( )
+#
+#	outLines = stdOutput.split( "\n" )
+#	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
+#
+#	buildStdoutPath = tempfile.mktemp()
+#	outF = open( buildStdoutPath, "w" )
+#	_infoTs( "***************** Piping xcodebuild stdout to '%s' " % buildStdoutPath )
+#	outF.write( stdOutput )
+#	outF.close( )
+#
+#	bundleModTimeSecs = fileModTimeAs( path= bundlePath, format= 'SecondsSinceEpoch' )
+#	currentSecs = calendar.timegm( time.gmtime() )
+#	secsDelta = currentSecs - bundleModTimeSecs 
+#	_infoTs( "Bundle '%s' built at %f and now is %f. Delta is %d" % ( bundlePath, bundleModTimeSecs, currentSecs, secsDelta ) ) 
+#	secsTolerance = 3
+#
+#	if len( errOutput ) > 0 :
+#		errLines = errOutput.split( "\n" )
+#		_dbx( "lines in stderr: %d" % len( errLines ) )
+#		_infoTs( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
+#
+#		buildStderrPath = tempfile.mktemp()
+#		errF = open( buildStderrPath, "w" )
+#		_infoTs( "****************** Piping xcodebuild stderr to '%s'" % ( buildStderrPath ) )
+#		errF.write( errOutput )
+#		errF.close( )
+#
+#		if secsDelta < secsTolerance : 
+#			_infoTs( "We continue since delta in seconds is less than %d" % secsTolerance )
+#		else:
+#			if True: 
+#				_infoTs( "Ignoring error from xcodebuild during script development/test!!!" )
+#			else: 
+#				answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
+#				if answer == 'yes':
+#					None # back to common path
+#				else:
+#					_errorExit( "Script aborted on request" )
+#
+#
+#	os.chdir( savedDir )
+#
+#	return bundlePath
 
 def mkdir ( path ):
 	if os.path.isdir( path ):
@@ -411,6 +413,7 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 	savedDir = os.getcwd(); os.chdir( projectDir )
 
 	shutdownDevice( dev ) # since xcodebuild complained about dev in booted state
+	time.sleep( 1 )
 	cmdArgs = [ 'xcodebuild', 'test' 
 				,'-target',  appName + 'Tests'
 	   			,'-derivedDataPath', outputDir
@@ -418,13 +421,14 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
            		,'-sdk', 'iphonesimulator' 
            		,'-destination', 'platform=iOS Simulator,OS=10.2,name=%s' % dev
 		]
-	_infoTs( "Running: %s" % " ".join( cmdArgs ), True )
 
 	devPretty= makeExpandFriendlyPath( dev )
 	langPretty= makeExpandFriendlyPath( lang )
 
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+	_infoTs( "Running: %s" % " ".join( cmdArgs ), True )
 	stdOutput, errOutput= proc.communicate( )
+	_infoTs( "Returned from subprocess", True )
 
 	outPath= os.path.join( outputDir, "UITest_StdOUT__%s_%s" % ( devPretty, langPretty ) )
 	fileTextAndLog2Console( text= stdOutput, consoleMsgPrefix= "Stdout of xcodebuild saved to", outPath= outPath )
@@ -552,9 +556,13 @@ def main():
 
 	_infoTs( "Screenshots for all device and lang pairing will be backed up to '%s'" % screenshotsArchiveRoot )
 
-	devs, langs = getListOfLangsAndDevicesFromFile ( './listOfLangsAndDevices.txt' )
-	_infoTs( 'Will iterate over these lang(s) : \t%s' % '; '.join( langs ) )
-	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '; '.join( devs ) )
+	devs, langs = getListOfLangsAndDevicesFromFile ( argObject.langDevFile )
+	_infoTs( 'Will iterate over these lang(s) : \t%s' % '__ ; __ **'.join( langs ) )
+	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '__ ; __'.join( devs ) )
+
+	waitSeconds = 4
+	_infoTs( '*** Counting down %d seconds. Ctl-c or processing will continue' % waitSeconds )
+	for i in range( waitSeconds, 0, -1 ): print( i ); time.sleep(1) 
 
 	if True:
 		closeSimulatorApp()

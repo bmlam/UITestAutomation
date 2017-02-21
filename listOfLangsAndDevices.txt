@@ -1,23 +1,26 @@
 #lang:en_US
 lang:de_DE
-lang:fr_FR
+#lang:fr_FR
+
+# devices _no_ longer supported: 
+# dev:iPhone 4s
 
 #NOT AVAILABLE as of 2017.02.18:       dev:iPad 2
 
-dev:iPad Air
-
-#dev:iPad Air 2 (10.2)
-#dev:iPad Pro (10.2)
-#dev:iPad Retina (10.2)
-#dev:iPhone 4s (10.2)
+#Tested devices
+#dev:iPad Air
 #dev:iPhone 5 (10.2)
-# dev:iPhone 5s 
-# dev:iPhone 6 
-#dev:iPhone 6 Plus (10.2)
-#dev:iPhone 6s (10.2) [A6903AF8-6914-4E1A-B230-2FDE28786C29]
-#dev:iPhone 6s (10.2) + Apple Watch - 38mm (2.2)
-#dev:iPhone 6s Plus (10.2)
-#dev:iPhone 6s Plus (10.2) + Apple Watch - 42mm (2.2)
+#dev:iPhone 7
+#dev:iPad Air 2
 
-dev:iPhone 7
+# dev:iPad Pro (9.7 inch)
+# dev:iPad Pro (12.9 inch)
+# dev:iPad Retina
+
+dev:iPhone 5s
+dev:iPhone 6
+dev:iPhone 6 Plus
+dev:iPhone 6s
+#dev:iPhone 6s (10.2) + Apple Watch - 38mm (2.2)
+dev:iPhone 6s Plus
 
