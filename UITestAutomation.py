@@ -485,7 +485,7 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
 	inFH.close()
 	#                       |-->  2          <--|   |-->     3            <--|> 4A  <   | -->   4B   <--|
 	#pattern = r'(^.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=)("[a-z]2-[A-Z]+")(.*$)'
-	pattern =  r'^(.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=\s*)("[a-z]{2}[_-][A-Z]+")(.*$)'
+	pattern =  r'^(.*<EnvironmentVariable\s+key\s*=\s*"TARGET_LANG"\s+value\s*=\s*)("[a-z]{2}[_-][A-Za-z]+")(.*$)'
 	match = re.match( pattern, contentOld, re.DOTALL )
 	if match == None:
 
