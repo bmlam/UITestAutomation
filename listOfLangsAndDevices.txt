@@ -1,6 +1,10 @@
+# as of 2017.03.16 these Simulators have been set up to allow ManyTimes notifications. Helas we have to do it again after each re-install
+# 
+# iPad Air, iPhone 5, iPhone 7, iPad Air 2 , iPad Pro (9.7 inch), iPad Pro (12.9 inch), iPad Retina
+
 #lang:en_US
-lang:de_DE
-#lang:fr_FR
+lang:it_IT
+lang:fr_FR
 
 # devices _no_ longer supported: 
 # dev:iPhone 4s
@@ -19,8 +23,8 @@ lang:de_DE
 
 dev:iPhone 5s
 dev:iPhone 6
-dev:iPhone 6 Plus
-dev:iPhone 6s
-#dev:iPhone 6s (10.2) + Apple Watch - 38mm (2.2)
-dev:iPhone 6s Plus
-
+#dev:iPhone 6 Plus
+#dev:iPhone 6s
+##dev:iPhone 6s (10.2) + Apple Watch - 38mm (2.2)
+#dev:iPhone 6s Plus
+#
