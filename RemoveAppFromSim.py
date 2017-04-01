@@ -18,7 +18,7 @@ import sys
 import time 
 
 #
-# Show script execution breadcrumbs
+#MARK: Show script execution breadcrumbs
 #
 
 def _dbx ( text ):
@@ -35,7 +35,7 @@ def _errorExit ( text ):
     sys.exit(1)
 
 #
-# Command line interface
+#MARK: Command line interface
 #
 def parseCmdLine() :
 
@@ -55,7 +55,7 @@ def parseCmdLine() :
 	return result
 
 #
-# Handling subprocess stdout and stderr
+#MARK: Handling subprocess stdout and stderr
 #
 
 def handleConsoleOutput ( text, isStderr, showLines, abortOnError= False ):
@@ -88,28 +88,8 @@ def fileTextAndLog2Console( text, consoleMsgPrefix, outPath= None ):
 	outF.write( text )
 	outF.close( )
 
-def main():
-
-	startTime= time.strftime("%H:%M:%S")
-	scriptBasename = os.path.basename( __file__ )
-
-	argObject = parseCmdLine()
-
-	devs, langs = getListOfLangsAndDevicesFromFile ( argObject.langDevFile )
-	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '__ ; __'.join( devs ) )
-
-	if True:
-		closeSimulatorApp()
-
-	for dev in devs:
-		for lang in langs:
-
-			_infoTs( "Done with simulator %s" % ( dev ) )
-
-	_infoTs( "\n\n%s completed normally. StartTime was %s" % ( scriptBasename, startTime) , True )
-	
 #
-# dealing with Simulators
+#MARK: dealing with Simulators
 #
 def closeSimulatorApp():
 	"""
@@ -151,6 +131,21 @@ def shutdownDevice( dev ):
 	cmdArgs = [ 'xcrun', 'simctl' 
 		, 'shutdown', dev
 		]
+	# _dbx( "Running: %s" % " ".join( cmdArgs ) )
+
+	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
+	stdOutput, errOutput= proc.communicate( )
+
+	handleConsoleOutput ( text= stdOutput, isStderr= False, showLines= 2 )
+
+	if len( errOutput ) > 0 :
+		handleConsoleOutput ( text= stdOutput, isStderr= True, showLines= 4 )
+		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "shutdownDevice stderr saved to", outPath= None )
+
+def removeAppFromDevice( dev, appId ):
+	"""
+	"""
+	cmdArgs = [ 'xcrun', 'simctl' , 'uninstall', dev, appId ]
 	_dbx( "Running: %s" % " ".join( cmdArgs ) )
 
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
@@ -163,7 +158,7 @@ def shutdownDevice( dev ):
 		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "shutdownDevice stderr saved to", outPath= None )
 
 #
-# Other helpers
+#MARK: Other helpers
 #
 def getListOfLangsAndDevicesFromFile(filePath):
 	"""Decompose the file content into list of languages and device types 
@@ -208,4 +203,25 @@ def getListOfLangsAndDevicesFromFile(filePath):
 
 	return devs, langs
 
+def main():
+
+	startTime= time.strftime("%H:%M:%S")
+	scriptBasename = os.path.basename( __file__ )
+
+	argObject = parseCmdLine()
+
+	devs, langs = getListOfLangsAndDevicesFromFile ( argObject.langDevFile )
+	_infoTs( 'Will iterate over these dev(s) : \t%s'  % '__ ; __'.join( devs ) )
+
+	if True:
+		closeSimulatorApp()
+
+	for dev in devs:
+		bootDevice( dev ) # should not matter if device is already up
+		removeAppFromDevice( dev, argObject.appFullName )
+		shutdownDevice( dev ) # should reduce system load
+		_infoTs( "Done with simulator %s" % ( dev ) )
+
+	_infoTs( "\n%s completed normally. StartTime was %s" % ( scriptBasename, startTime) , True )
+	
 main()
