@@ -53,6 +53,7 @@ g_userHome= os.path.expanduser( '~' )
 g_errlogDir	= os.path.join( g_userHome, "UITestAutomatation_ErrorLogs" )
 
 g_cntDisplayed = 0
+g_batchMode = False
 
 def _dbx ( text ):
     sys.stdout.write( '  Debug(%s - Ln %d): %s\n' % ( inspect.stack()[1][3], inspect.stack()[1][2], text ) ) 
@@ -86,8 +87,8 @@ def handleConsoleOutput ( text, isStderr, showLines, abortOnError= False ):
 			if abortOnError:
 				_errorExit( "Aborted since error is flagged as error" ) 
 
-	else:
-		sys.stdout.write( "** ShortenedConsoleOutput: %s from caller %s at Line %d is empty!\n" % ( type, callerName, callerLine ) )
+	# else:
+	#	sys.stdout.write( "** ShortenedConsoleOutput: %s from caller %s at Line %d is empty!\n" % ( type, callerName, callerLine ) )
 
 def parseCmdLine() :
 
@@ -106,9 +107,16 @@ def parseCmdLine() :
 	parser.add_argument( '--langDevFile', help='full path of the file listing languages and devices to test', required= True )
 	parser.add_argument( '--schemeFile', help='relative path of the apps scheme file from projectRoot', required= True )
 
-	cleanSwithGroup = parser.add_mutually_exclusive_group(required=False)
-	cleanSwithGroup.add_argument('-C', '--clean', dest='cleanSwitch', action='store_true')
-	cleanSwithGroup.add_argument('-c', '--no-clean', dest='cleanSwitch', action='store_false')
+	# batch vs no-batch
+	batchModeGroup = parser.add_mutually_exclusive_group(required=False)
+	batchModeGroup.add_argument('--batch', dest='batchMode', action='store_true')
+	batchModeGroup.add_argument('--no-batch', dest='batchMode', action='store_false')
+	parser.set_defaults(batchMode= False)
+
+	# clean vs no-clean
+	cleanSwitchGroup = parser.add_mutually_exclusive_group(required=False)
+	cleanSwitchGroup.add_argument('-C', '--clean', dest='cleanSwitch', action='store_true')
+	cleanSwitchGroup.add_argument('-c', '--no-clean', dest='cleanSwitch', action='store_false')
 	parser.set_defaults(cleanSwitch= False)
 
 	result= parser.parse_args()
@@ -118,6 +126,8 @@ def parseCmdLine() :
 	# derive settings
 	if result.buildTestOutputDir == None:  result.buildTestOutputDir = os.path.join( g_buildTestOutputDefaultRoot, result.appName )
 	if result.schemeFile != None:  result.schemeFile = os.path.join( result.projectRoot, result.schemeFile ) # not so nice, fixme
+	g_batchMode = result.batchMode
+	# _errorExit( "batchMode: %s" % "y" if g_batchMode else "n" )
 
 	return result
 
@@ -339,7 +349,7 @@ def shutdownDevice( dev ):
 	cmdArgs = [ 'xcrun', 'simctl' 
 		, 'shutdown', dev
 		]
-	_dbx( "Running: %s" % " ".join( cmdArgs ) )
+	# _dbx( "Running: %s" % " ".join( cmdArgs ) )
 
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
@@ -361,8 +371,8 @@ def closeSimulatorApp():
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	stdOutput, errOutput= proc.communicate( )
 
-	outLines = stdOutput.split( "\n" )
-	if outLines > 0: _infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -3: ] ) ) )
+	#outLines = stdOutput.split( "\n" )
+	#if outLines > 0: _infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -3: ] ) ) )
 
 	if len( errOutput ) > 0 :
 		errLines = errOutput.split( "\n" )
@@ -443,11 +453,12 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 			outPath= os.path.join( outputDir, "UITest_StdERR__%s_%s" % ( devPretty, langPretty ) )
 			fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= outPath )
 	
-			answer = raw_input( "Continue processing? Enter 'y' to proceed or anything else to abort: " )
-			if answer == 'y':
-				None # back to common path
-			else:
-				_errorExit( "Script aborted on request" )
+			if not g_batchMode:
+				answer = raw_input( "Continue processing? Enter 'y' to proceed or anything else to abort: " )
+				if answer == 'y':
+					None # back to common path
+				else:
+					_errorExit( "Script aborted on request" )
 
 	os.chdir( savedDir )
 
@@ -523,7 +534,7 @@ Executed 1 test, with 0 failures (0 unexpected) in 12.504 (12.507) seconds
 	return True when found else False
 	Ideally we should also extract the passing timestamp and verify that it is recent. But that is for later
 	"""
-	_dbx( "got lines: %d" % xcbStdout.count( "\n" ) )
+	#_dbx( "got lines: %d" % xcbStdout.count( "\n" ) )
 	#groups      1                                         2                                    3                                                                               45
 	pattern = r"^(.*\s+)(Test Suite 'All tests' passed at )(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\.)\s+(Executed \d+ test, with 0 failures \(\d+ unexpected\) in .* seconds\s)(.*$)" 
 	match = re.match( pattern, xcbStdout, re.DOTALL )

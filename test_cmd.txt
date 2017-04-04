@@ -1,5 +1,5 @@
 # main test command
-./UITestAutomation.py -a ManyTimes -p /Users/bmlam/Dropbox/my-apps/ManyTimes -C --schemeFile ManyTimes.xcodeproj/xcuserdata/bmlam.xcuserdatad/xcschemes/ManyTimes.xcscheme --langDevFile /Users/bmlam/Dropbox/git_clones/UITestAutomation/listOfLangsAndDevices.txt
+./UITestAutomation.py -a ManyTimes -p /Users/bmlam/Dropbox/my-apps/ManyTimes -C --schemeFile ManyTimes.xcodeproj/xcuserdata/bmlam.xcuserdatad/xcschemes/ManyTimes.xcscheme --langDevFile /Users/bmlam/Dropbox/git_clones/UITestAutomation/listOfLangsAndDevices.txt --batch
 
 
 # remove app from all simulators
