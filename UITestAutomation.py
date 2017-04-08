@@ -51,7 +51,7 @@ import time
 g_screenshotsBakRoot=  os.path.join( os.environ[ 'HOME' ] , 'Desktop',  'TestAuto_screenshots' )
 g_buildTestOutputDefaultRoot	= os.path.join( "/tmp", "UITestAutomatationOutput" )
 g_userHome= os.path.expanduser( '~' )
-g_errlogDir	= os.path.join( g_userHome, "UITestAutomatation_ErrorLogs" )
+g_consoleBackupDir	= os.path.join( g_userHome, "UITestAutomatationRun_" + time.strftime( "%Y%m%D_%H%M%S" ) )
 
 g_cntDisplayed = 0
 g_batchMode = False
@@ -83,8 +83,8 @@ def handleConsoleOutput ( text, isStderr, showLines, abortOnError= False ):
 		sys.stdout.write( "** ShortenedConsoleOutput: last %d (of %d) %s lines from caller %s at Line %d: \n%s" % 
 			( showLines, len( lines ), type, callerName, callerLine, lines[ -showLines: ] ) ) 
 		if isStderr:
-			path = os.path.join( g_errlogDir, 'ErrorFrom_%s_Ln%d.log' % ( callerName, callerLine ) )
-			fileTextAndLog2Console( text= text, consoleMsgPrefix= "Error output automatically saved to", outPath= path )
+			path = os.path.join( g_consoleBackupDir, 'ErrorFrom_%s_Ln%d.log' % ( callerName, callerLine ) )
+			fileTextAndShowPathOnConsole( text= text, consoleMsgPrefix= "Error output automatically saved to", outPath= path )
 			if abortOnError:
 				_errorExit( "Aborted since error is flagged as error" ) 
 
@@ -178,7 +178,7 @@ def getListOfLangsAndDevicesFromFile(filePath):
 	return devs, langs
 
 
-def mkdir ( path ):
+def myMkDir ( path ):
 	if os.path.isdir( path ):
 		return
 	else:
@@ -215,23 +215,23 @@ def assertScreenshotsBackupDir ( path ):
 			else:
 				_errorExit( 'Script aborted.')
 			
-	mkdir( path )
+	myMkDir( path )
 
-def backupScreenshots( srcRoot, tgtDir ):
+def moveScreenshots( srcRoot, tgtDir ):
 	"""
 	"""
 
 	cntFiles = 0
 	cntRotated = 0
 	srcDir = srcRoot
-	_dbx( "Copying png files from '%s' to '%s' ..." % ( srcDir, tgtDir ) )
+	_dbx( "Moving png files from '%s' to '%s' ..." % ( srcDir, tgtDir ) )
 	for file in glob.glob( srcDir + '/*.png' ):
 		if file.find( 'landscape' ) >= 0 :
 			subprocess.check_call( [ 'sips', '-r', '-90', file ] )
 			cntRotated += 1
-		shutil.copy( file, tgtDir )
+		shutil.move( file, tgtDir )
 		cntFiles += 1
-	_dbx( "Files rotated: %d, copied: '%d'" % ( cntRotated, cntFiles ) )
+	_dbx( "Files rotated: %d, moved: '%d'" % ( cntRotated, cntFiles ) )
 
 def makeExpandFriendlyPath( string ):
 	# replace round brackets characters and space with underscore
@@ -282,7 +282,7 @@ def shutdownDevice( dev ):
 
 	if len( errOutput ) > 0 :
 		handleConsoleOutput ( text= stdOutput, isStderr= True, showLines= 4 )
-		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "shutdownDevice stderr saved to", outPath= None )
+		fileTextAndShowPathOnConsole( text= errOutput, consoleMsgPrefix= "shutdownDevice stderr saved to", outPath= None )
 
 def closeSimulatorApp():
 	"""
@@ -301,7 +301,7 @@ def closeSimulatorApp():
 	if len( errOutput ) > 0 :
 		errLines = errOutput.split( "\n" )
 		_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -3: ] ) ) )
-		fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr saved to", outPath= None )
+		fileTextAndShowPathOnConsole( text= errOutput, consoleMsgPrefix= "Stderr saved to", outPath= None )
 
 def deployAppToDevice( dev, bundlePath ):
 	"""
@@ -328,7 +328,8 @@ def deployAppToDevice( dev, bundlePath ):
 
 		_errorExit( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
 
-def fileTextAndLog2Console( text, consoleMsgPrefix, outPath= None ):
+def fileTextAndShowPathOnConsole( text, consoleMsgPrefix, outPath= None ):
+	# _dbx( outPath ); _dbx( "%d" % len( text ) )
 	if outPath == None:
 		outPath = tempfile.mktemp()
 	outF = open( outPath, "w" )
@@ -344,6 +345,7 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 	this monkey solution.
 	"""
 
+	returnCode = False
 	savedDir = os.getcwd(); os.chdir( projectDir )
 
 	shutdownDevice( dev ) # since xcodebuild complained about dev in booted state
@@ -362,20 +364,21 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
 	_infoTs( "Running: %s" % " ".join( cmdArgs ), True )
 	stdOutput, errOutput= proc.communicate( )
-	_infoTs( "Returned from subprocess", True )
+	_infoTs( "Returned from xcodebuild", True )
 
-	outPath= os.path.join( outputDir, "UITest_StdOUT__%s_%s" % ( devPretty, langPretty ) )
-	fileTextAndLog2Console( text= stdOutput, consoleMsgPrefix= "Stdout of xcodebuild saved to", outPath= outPath )
+	stdoutLog = os.path.join( g_consoleBackupDir, "UITest_StdOUT__%s_%s" % ( devPretty, langPretty ) )
+	fileTextAndShowPathOnConsole( text= stdOutput, consoleMsgPrefix= "Stdout of xcodebuild saved to", outPath= stdoutLog )
 
 	if checkXcbAllTestsPassed( xcbStdout = stdOutput ): 
 		_infoTs( " *** Combo ___%s -- %s___ passed test ****" % ( lang ,dev ) )
+		returnCode = True
 	else:
 
 		if len( errOutput ) > 0:
 			handleConsoleOutput ( text= errOutput, isStderr= False, showLines= 10, abortOnError= True ) # fixme: test abortOnError
 	
-			outPath= os.path.join( outputDir, "UITest_StdERR__%s_%s" % ( devPretty, langPretty ) )
-			fileTextAndLog2Console( text= errOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= outPath )
+			stderrLog = os.path.join( g_consoleBackupDir, "UITest_StdERR__%s_%s" % ( devPretty, langPretty ) )
+			fileTextAndShowPathOnConsole( text= errOutput, consoleMsgPrefix= "Stderr of xcodebuild saved to", outPath= stderrLog )
 	
 			if not g_batchMode:
 				answer = raw_input( "Continue processing? Enter 'y' to proceed or anything else to abort: " )
@@ -385,6 +388,7 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 					_errorExit( "Script aborted on request" )
 
 	os.chdir( savedDir )
+	return returnCode, stdoutLog, stderrLog
 
 def setLangTerrInScheme( schemeFilePath, langTerr ) :
 	"""
@@ -447,7 +451,7 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
 	return backupPath
 
 def setup():
-	mkdir( g_errlogDir )	
+	myMkDir( g_consoleBackupDir )	
 
 def checkXcbAllTestsPassed( xcbStdout ):
 	"""
@@ -508,6 +512,7 @@ def main():
 		# deployAppToDevice( dev= dev, bundlePath= bundlePath )
 	else:
 		_infoTs( "skipped build to shortcut test!!" )
+	testSummaryLines = []; testSummaryLines.append( "Test summary:" ) 
 	for dev in devs:
 		for lang in langs:
 
@@ -517,9 +522,17 @@ def main():
 			else:
 				_infoTs( "skipped Deploying App to shortcut test!!" )
 
-			startUITestTarget( projectDir= argObject.projectRoot
+			success, stdoutLog, stderrLog = startUITestTarget( projectDir= argObject.projectRoot
 				, outputDir= argObject.buildTestOutputDir
 				, lang= lang, dev= dev, appName= argObject.appName )
+			
+			summaryLine = "Combo %s - %s " % ( dev, lang ) 
+			summaryLine += "succeeded" if success else "failed" 
+			if not success:
+				if stdoutLog != None: summaryLine += ". stdout: %s" % stdoutLog
+				if stderrLog != None: summaryLine += ". stderr: %s" % stderrLog
+			_dbx( summaryLine )
+			testSummaryLines.append( summaryLine )
 
 			devPretty= makeExpandFriendlyPath( dev )
 			langPretty= makeExpandFriendlyPath( lang )
@@ -528,11 +541,15 @@ def main():
 			assertScreenshotsBackupDir ( pngTargetDir )
 
 			pngSourceDir = "/Users/bmlam/Temp/ManyTimes/Screenshots"  # this is hardwired in swift test program
-			backupScreenshots( srcRoot= pngSourceDir, tgtDir= pngTargetDir )
+			moveScreenshots( srcRoot= pngSourceDir, tgtDir= pngTargetDir )
 
 			_infoTs( "Done with simulator %s and lang %s" % ( dev, lang ) )
 			closeSimulatorApp()
-
-	_infoTs( "\n\n%s completed normally. StartTime was %s" % ( scriptBasename, startTime) , True )
+	#_dbx( "lines: %d" % len( testSummaryLines ) )
+	summaryText = "\n".join( testSummaryLines ) 
+	_infoTs( summaryText )
+	testSummaryLog = os.path.join( g_consoleBackupDir, "test_summary.txt" )
+	fileTextAndShowPathOnConsole( text = summaryText, consoleMsgPrefix = "A copy of the summary above is written to ", outPath= testSummaryLog )
+	_infoTs( "%s completed normally. StartTime was %s\n%s" % ( scriptBasename, startTime, '*'*80 ) , True )
 	
 main() # program entry point
