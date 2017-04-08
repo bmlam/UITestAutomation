@@ -22,6 +22,7 @@ In practice in my test and trial approach the current sequence is chosen sicne i
 
 Some coding convention to bear in mind:
 	assignment: always leave space to both side of = to be consistent with swift. Named argument in method calls may be exception
+	bracketing: always leave space after opening round bracket and before closing.
 
 	useful commands:
 		xcrun instruments -s devices # show available devices
@@ -92,6 +93,7 @@ def handleConsoleOutput ( text, isStderr, showLines, abortOnError= False ):
 
 def parseCmdLine() :
 
+	global g_batchMode
 	parser = argparse.ArgumentParser()
 	# lowercase shortkeys
 
@@ -127,6 +129,7 @@ def parseCmdLine() :
 	if result.buildTestOutputDir == None:  result.buildTestOutputDir = os.path.join( g_buildTestOutputDefaultRoot, result.appName )
 	if result.schemeFile != None:  result.schemeFile = os.path.join( result.projectRoot, result.schemeFile ) # not so nice, fixme
 	g_batchMode = result.batchMode
+	_infoTs( "batchMode: %s" % "y" if g_batchMode else "n" )
 	# _errorExit( "batchMode: %s" % "y" if g_batchMode else "n" )
 
 	return result
@@ -167,92 +170,13 @@ def getListOfLangsAndDevicesFromFile(filePath):
 					devs.append( value )
 				elif key == langLiteral :
 					if value in langs :
-						_errorExit( "Device %s found again in line %d. Dupes are not permitted!" % (value, lineNo) )
+						_errorExit( "Lang %s found again in line %d. Dupes are not permitted!" % (value, lineNo) )
 					langs.append( value )
 				else:
 					_errorExit( "The keyword found in line %d of '%s' is invalid" % ( lineNo, filePath ) )
 
 	return devs, langs
 
-#def performBuild ( appName, projectDir, buildOutputDir, doClean = False ):
-#	""" A wrapper around `xcodebuild` that tells it to build the app in the temp
-#	directory. If your app uses workspaces or special schemes, you'll need to
-#	specify them here.
-#	
-#	Use `man xcodebuild` for more information on how to build your project.
-#	"""
-#
-#	xcworkspaceFiles = glob.glob( '%s/*.xcworkspace' % projectDir )
-#	if len( xcworkspaceFiles ) > 0 :
-#		_errorExit ( "Found at least one xcworkspace files in '%s'. Building with xcworkspace is not yet supported!" % projectDir )
-#
-#	cmdArgs = [ 'xcodebuild'
-#		, '-sdk', 'iphonesimulator'
-#		, '-scheme', appName
-#		, 'CONFIGURATION_BUILD_DIR=' + buildOutputDir
-#		# , 'PRODUCT_NAME=' + 'app'
-#		]
-#
-#	bundlePath = os.path.join( buildOutputDir, appName + '.app' )
-#	
-#	if doClean: 
-#		_infoTs( "Building with __clean__ ..." , True )
-#		cmdArgs.append( 'clean' )
-#	else :
-#		_infoTs( "Building without __clean__ ..."  )
-#	cmdArgs.append( 'build' )
-#
-#	_dbx( "Running: %s" % " ".join( cmdArgs ) )
-#
-#	savedDir = os.getcwd()
-#	os.chdir( projectDir )
-#	# subprocess.check_call ( cmdArgs )
-#
-#	proc= subprocess.Popen( cmdArgs ,stdin=subprocess.PIPE ,stdout=subprocess.PIPE ,stderr=subprocess.PIPE)
-#	stdOutput, errOutput= proc.communicate( )
-#
-#	outLines = stdOutput.split( "\n" )
-#	_infoTs( "Last lines of stdout:\n%s\n" % ( '\n'.join( outLines[ -5: ] ) ) )
-#
-#	buildStdoutPath = tempfile.mktemp()
-#	outF = open( buildStdoutPath, "w" )
-#	_infoTs( "***************** Piping xcodebuild stdout to '%s' " % buildStdoutPath )
-#	outF.write( stdOutput )
-#	outF.close( )
-#
-#	bundleModTimeSecs = fileModTimeAs( path= bundlePath, format= 'SecondsSinceEpoch' )
-#	currentSecs = calendar.timegm( time.gmtime() )
-#	secsDelta = currentSecs - bundleModTimeSecs 
-#	_infoTs( "Bundle '%s' built at %f and now is %f. Delta is %d" % ( bundlePath, bundleModTimeSecs, currentSecs, secsDelta ) ) 
-#	secsTolerance = 3
-#
-#	if len( errOutput ) > 0 :
-#		errLines = errOutput.split( "\n" )
-#		_dbx( "lines in stderr: %d" % len( errLines ) )
-#		_infoTs( "Last lines of stderr:\n%s\n" % ( '\n'.join( errLines[ -10: ] ) ) )
-#
-#		buildStderrPath = tempfile.mktemp()
-#		errF = open( buildStderrPath, "w" )
-#		_infoTs( "****************** Piping xcodebuild stderr to '%s'" % ( buildStderrPath ) )
-#		errF.write( errOutput )
-#		errF.close( )
-#
-#		if secsDelta < secsTolerance : 
-#			_infoTs( "We continue since delta in seconds is less than %d" % secsTolerance )
-#		else:
-#			if True: 
-#				_infoTs( "Ignoring error from xcodebuild during script development/test!!!" )
-#			else: 
-#				answer = raw_input( "Continue processing? Enter 'yes' to proceed or anything else to abort: " )
-#				if answer == 'yes':
-#					None # back to common path
-#				else:
-#					_errorExit( "Script aborted on request" )
-#
-#
-#	os.chdir( savedDir )
-#
-#	return bundlePath
 
 def mkdir ( path ):
 	if os.path.isdir( path ):
@@ -500,7 +424,7 @@ def setLangTerrInScheme( schemeFilePath, langTerr ) :
 	match = re.match( pattern, contentOld, re.DOTALL )
 	if match == None:
 
-		_errorExit( "Could not find pattern '%s' in xml text of scheme file" % pattern )
+		_errorExit( "Could not find pattern '%s' in xml text of scheme file. Consider editing the scheme to satisfy the pattern!" % pattern )
 
 	head = match.group(1)
 	currLangFound  = match.group(2)
@@ -611,4 +535,4 @@ def main():
 
 	_infoTs( "\n\n%s completed normally. StartTime was %s" % ( scriptBasename, startTime) , True )
 	
-main()
+main() # program entry point

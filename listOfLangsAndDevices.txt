@@ -1,30 +1,37 @@
-# as of 2017.03.16 these Simulators have been set up to allow ManyTimes notifications. Helas we have to do it again after each re-install
+# as of 2017.03.16 these Simulators have been set up to allow ManyTimes notifications on my AirBook. Helas we have to do it again after each re-install
 # 
 # iPad Air, iPhone 5, iPhone 7, iPad Air 2 , iPad Pro (9.7 inch), iPad Pro (12.9 inch), iPad Retina
 
 #lang:en_US
-lang:it_IT
-lang:fr_FR
+#lang:de_DE
+#lang:es_ES
+#lang:fr_FR
+#lang:it_IT
+# for Chinese and maybe even generally, we do not need to specify territory!
+lang:zh-Hans
 
 # devices _no_ longer supported: 
 # dev:iPhone 4s
 
 #NOT AVAILABLE as of 2017.02.18:       dev:iPad 2
 
-#Tested devices
-#dev:iPad Air
-#dev:iPhone 5 (10.2)
-#dev:iPhone 7
-#dev:iPad Air 2
-
-# dev:iPad Pro (9.7 inch)
-# dev:iPad Pro (12.9 inch)
-# dev:iPad Retina
-
+dev:iPad Air
+dev:iPhone 5
 dev:iPhone 5s
 dev:iPhone 6
-#dev:iPhone 6 Plus
-#dev:iPhone 6s
+#NOt on AirBook:
+ dev:iPhone 6 Plus
+dev:iPhone 6s
+dev:iPhone 6s Plus
 ##dev:iPhone 6s (10.2) + Apple Watch - 38mm (2.2)
-#dev:iPhone 6s Plus
+dev:iPhone 7
+
+#NOt on AirBook: 
+dev:iPad Air 2
+#NOt on AirBook: 
+dev:iPad Pro (9.7 inch)
+#NOt on AirBook: 
+dev:iPad Pro (12.9 inch)
+dev:iPad Retina
+
 #
