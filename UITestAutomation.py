@@ -369,6 +369,7 @@ def startUITestTarget( projectDir, lang, dev, outputDir, appName ):
 	stdoutLog = os.path.join( g_consoleBackupDir, "UITest_StdOUT__%s_%s" % ( devPretty, langPretty ) )
 	fileTextAndShowPathOnConsole( text= stdOutput, consoleMsgPrefix= "Stdout of xcodebuild saved to", outPath= stdoutLog )
 
+	stdoutLog = None; stderrLog = None
 	if checkXcbAllTestsPassed( xcbStdout = stdOutput ): 
 		_infoTs( " *** Combo ___%s -- %s___ passed test ****" % ( lang ,dev ) )
 		returnCode = True
@@ -481,7 +482,13 @@ Executed 1 test, with 0 failures (0 unexpected) in 12.504 (12.507) seconds
 	return True
 
 def main():
+	nextStep="""
+Arrange screenshots output folders in the hierarchy <device>/<locale> since for itms transporter we will
+use only image files for different locales from iPhone7Plus and iPadAir2? device only and we will merge
+images from all locales into one single folder!
+"""
 
+	_errorExit( nextStep )
 	startTime= time.strftime("%H:%M:%S")
 
 	scriptBasename = os.path.basename( __file__ )
