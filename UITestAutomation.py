@@ -488,7 +488,7 @@ use only image files for different locales from iPhone7Plus and iPadAir2? device
 images from all locales into one single folder!
 """
 
-	_errorExit( nextStep )
+	# _errorExit( nextStep )
 	startTime= time.strftime("%H:%M:%S")
 
 	scriptBasename = os.path.basename( __file__ )
