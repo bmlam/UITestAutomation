@@ -34,8 +34,7 @@ class Helper {
 		// as luxurious as argparse, not even getops, yet
 
 		for (ix, arg) in CommandLine.arguments.enumerated() {
-			_dbx("ix: \(ix)")
-			_dbx("arg: \(arg)")
+			//_dbx("ix: \(ix)"); _dbx("arg: \(arg)")
 			switch ix {
 				case 0: break // this very program 
 				case 1: inputPath = arg
@@ -104,7 +103,12 @@ class CompileIssue {
 	}
 
 	static let errMsgPattern = "\\d+:\\d+: error:"
+	static let warnMsgPattern = "\\d+:\\d+: warning:"
+	static let noteMsgPattern = "\\d+:\\d+: note:"
+
 	static let errMsgRegex = try! NSRegularExpression( pattern: errMsgPattern, options: [] ) //we seem to foresake error handling and accept automatic abort
+	static let warnMsgRegex = try! NSRegularExpression( pattern: warnMsgPattern, options: [] ) //we seem to foresake error handling and accept automatic abort
+	static let noteMsgRegex = try! NSRegularExpression( pattern: noteMsgPattern, options: [] ) //we seem to foresake error handling and accept automatic abort
 
 	static func doesMatchAtMostOnce( regexEngine: NSRegularExpression, string: String ) -> Bool {
 		var cntMatch = 0
@@ -149,18 +153,20 @@ func main() {
 	var fsmState = CompileIssue.FsmStates.initial 
 	for (lno, lnText) in lines.enumerated() {
 		//for debugging print line begin
-		let indexMonkey /*bcos the index concept is monkey-like*/ = lnText.characters.count > 80 
-				? lnText.index( lnText.startIndex, offsetBy: 80 ) 
+		let indexMonkey /*bcos the index concept is monkey-like*/ = lnText.characters.count > 120
+				? lnText.index( lnText.startIndex, offsetBy: 120 ) 
 				: lnText.index( lnText.startIndex, offsetBy: lnText.characters.count ) 
 		let textChunk = lnText.substring( to: indexMonkey )
-		_dbx("textChunk: \(textChunk)")
-	
-		_dbx("fsmState: \(fsmState)")
+		// _dbx("textChunk: \(textChunk)")
+		//_dbx("fsmState: \(fsmState)")
 		switch fsmState {
 			case .initial :
 				if CompileIssue.doesMatchAtMostOnce( regexEngine: CompileIssue.errMsgRegex, string: lnText ) {
 					fsmState = CompileIssue.FsmStates.srcLineExpected
 					issues.append( CompileIssue( errMsg: lnText ) )
+				} else if CompileIssue.doesMatchAtMostOnce( regexEngine: CompileIssue.warnMsgRegex, string: lnText ) {
+					fsmState = CompileIssue.FsmStates.srcLineExpected
+					issues.append( CompileIssue( warnMsg: lnText ) )
 				}
 			case .srcLineExpected:		
 				issues.last!.srcLine = lnText
@@ -169,18 +175,39 @@ func main() {
 				issues.last!.srcPin = lnText
 				fsmState = CompileIssue.FsmStates.noteMsgExpected
 			case .noteMsgExpected: 		
+				if CompileIssue.doesMatchAtMostOnce( regexEngine: CompileIssue.noteMsgRegex, string: lnText ) {
+					issues.last!.noteMsg = lnText
+					fsmState = CompileIssue.FsmStates.refLineExpected
+				} else {
+					fsmState = CompileIssue.FsmStates.initial
+				}
+			case .refLineExpected: 		
+				issues.last!.refLine = lnText
+				fsmState = CompileIssue.FsmStates.refPinExpected
+			case .refPinExpected:		
+				issues.last!.refPin = lnText
 				fsmState = CompileIssue.FsmStates.initial
-//			case .refLineExpected: 		_dbx("line: \(#line)")
-//			case .refPinExpected:		_dbx("line: \(#line)")
 			default: break
 	
 		} //switch
 	
 		// if lno > 12 { _dbx( "TEST: reached line \(lno)"); break }
 	}
+
 	_dbx("issues.count: \(issues.count)")
+	if listWarnings {
+		for (ix, issue) in issues.enumerated() where issue.type == .warning {
+			_dbx( "----  WARNING issue no. \(ix)" )
+			print( issue.mainMsg )
+			print( issue.srcLine )
+			print( issue.srcPin )
+			Helper.printIfNotNull( issue.noteMsg )
+			Helper.printIfNotNull( issue.refLine )
+			//refPin not much helpful:  Helper.printIfNotNull( issue.refPin )
+		}
+	}
 	for (ix, issue) in issues.enumerated() where issue.type == .error {
-		_dbx( "----  issue no. \(ix)" )
+		_dbx( "----  ERROR issue no. \(ix)" )
 		print( issue.mainMsg )
 		print( issue.srcLine )
 		print( issue.srcPin )
