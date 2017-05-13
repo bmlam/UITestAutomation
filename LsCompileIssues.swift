@@ -67,15 +67,37 @@ class Helper {
 //MARK: CompileIssue 
 class CompileIssue {
 	enum FsmStates {
-		case initial, gotErrMsg, gotSrcCode, gotNote
+		case initial
+		, srcLineExpected, srcPinExpected
+		, noteMsgExpected, refLineExpected, refPinExpected
 	}
-	var errMsg = String()
-	var srcCode = String()
-	var note = String()
 
-	func setErrMsg ( _ arg: String ) { self.errMsg = arg }
-	func setSrcCode( _ arg: String ) { self.srcCode = arg }
-	func setNote   ( _ arg: String ) { self.note = arg }
+	static let errMsgPattern = "\\d+:\\d+: error:"
+	static let errMsgRegex = try! NSRegularExpression( pattern: errMsgPattern, options: [] ) //we seem to foresake error handling and accept automatic abort
+
+	static func doesMatchAtMostOnce( regexEngine: NSRegularExpression, string: String ) -> Bool {
+		var cntMatch = 0
+		regexEngine.enumerateMatches( in: string ,options: []
+			,range: NSRange( location: 0, length: string.characters.count ) )
+		{ //closure or match handler
+			(match, _, stop) in  
+			cntMatch += 1
+			if cntMatch > 1 { 
+					fatalError( "Found more than 1 match for '\(regexEngine.pattern)' in following line!\n\(string)") 
+			}
+		}
+		return cntMatch <= 1
+	}
+
+	public var errMsg = String()
+	public var srcLine = String()
+	public var srcPin = String()
+	public var noteMsg = String()
+	public var refLine = String()
+	public var refPin = String()
+
+	init( errMsg: String ) { self.errMsg = errMsg }
+
 }
 
 let (inputPath, listWarnings) = Helper.getSettings()
@@ -83,30 +105,55 @@ _dbx( "inputPath: \(inputPath)" )
 _dbx("listWarnings: \(listWarnings)")
 let lines = Helper.readLinesFromFile ( path: inputPath )
 
-let errMsgPattern = "\\d+:\\d+: error:"
-let errMsgRegex = try! NSRegularExpression( pattern: errMsgPattern, options: [] ) //we seem to foresake error handling and accept automatic abort
 
 var fsmState = CompileIssue.FsmStates.initial 
 for (lno, lnText) in lines.enumerated() {
 	_dbx("lno: \(lno)")
+	//for debugging print line begin
 	let indexMonkey /*bcos the index concept is monkey-like*/ = lnText.characters.count > 80 
 			? lnText.index( lnText.startIndex, offsetBy: 80 ) 
 			: lnText.index( lnText.startIndex, offsetBy: lnText.characters.count ) 
 	let textChunk = lnText.substring( to: indexMonkey )
 	_dbx("textChunk: \(textChunk)")
+
+/* examples of issues: 
+
+Type 1 (3 lines msg,sourceLine,pointer):
+
+	/Users/bmlam/Dropbox/my-apps/MountainsAround/MountainsAround/RootViewController.swift:50:4: error: expected '{' to start the body of for-each loop
+                        self.mapView.addAnnotation( pin )
+                        ^
+Type 2 (5 lines msg,sourceLine,pointer,note,referencedLine,pointer):
+
+/Users/bmlam/Dropbox/my-apps/MountainsAround/MountainsAround/RootViewController.swift:49:14: error: use of unresolved identifier 'mountainPin'
+                for pin in mountainPin//s {
+                           ^~~~~~~~~~~
+	/Users/bmlam/Dropbox/my-apps/MountainsAround/MountainsAround/Global.swift:4:5: note: did you mean 'mountainPins'?
+var mountainPins = [MyPin]()
+    ^
+
+For type 1: we store sourceLine and pointer as one property
+For type 2: we store the note,referencedLine,pointer as one property
+
+*/
+	var issues = [CompileIssue]()
 	switch fsmState {
 		case .initial :
-			errMsgRegex.enumerateMatches( in: lnText ,options: []
-				,range: NSRange( location: 0, length: lnText.characters.count ) )
-			{ //closure or match handler
-				(macth, _, stop) in  
-				
-				fsmState = CompileIssue.FsmStates.gotErrMsg 
-				
+			if CompileIssue.doesMatchAtMostOnce( regexEngine: CompileIssue.errMsgRegex, string: lnText ) {
+				fsmState = CompileIssue.FsmStates.srcLineExpected
+				issues.append( CompileIssue( errMsg: lnText ) )
 			}
-		default: break
+		case .srcLineExpected:		_dbx("line: \(#line)")
+		case .srcPinExpected:		_dbx("line: \(#line)")
+		case .noteMsgExpected: 		_dbx("line: \(#line)")
+		case .refLineExpected: 		_dbx("line: \(#line)")
+		case .refPinExpected:		_dbx("line: \(#line)")
+
 	} //switch
+
+	_dbx("issues.count: \(issues.count)")
 }
 
 // print("xyz: \(xyz)")
 // _dbx("xyz: \(xyz)")
+// _dbx("line: \(#line)")
