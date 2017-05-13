@@ -63,8 +63,50 @@ class Helper {
 		return lines
 	}
 } //Helper
-let inputPath = Helper.getSettings()
-print("inputPath: \(inputPath)")
+
+//MARK: CompileIssue 
+class CompileIssue {
+	enum FsmStates {
+		case initial, gotErrMsg, gotSrcCode, gotNote
+	}
+	var errMsg = String()
+	var srcCode = String()
+	var note = String()
+
+	func setErrMsg ( _ arg: String ) { self.errMsg = arg }
+	func setSrcCode( _ arg: String ) { self.srcCode = arg }
+	func setNote   ( _ arg: String ) { self.note = arg }
+}
+
+let (inputPath, listWarnings) = Helper.getSettings()
+_dbx( "inputPath: \(inputPath)" )
+_dbx("listWarnings: \(listWarnings)")
+let lines = Helper.readLinesFromFile ( path: inputPath )
+
+let errMsgPattern = "\\d+:\\d+: error:"
+let errMsgRegex = try! NSRegularExpression( pattern: errMsgPattern, options: [] ) //we seem to foresake error handling and accept automatic abort
+
+var fsmState = CompileIssue.FsmStates.initial 
+for (lno, lnText) in lines.enumerated() {
+	_dbx("lno: \(lno)")
+	let indexMonkey /*bcos the index concept is monkey-like*/ = lnText.characters.count > 80 
+			? lnText.index( lnText.startIndex, offsetBy: 80 ) 
+			: lnText.index( lnText.startIndex, offsetBy: lnText.characters.count ) 
+	let textChunk = lnText.substring( to: indexMonkey )
+	_dbx("textChunk: \(textChunk)")
+	switch fsmState {
+		case .initial :
+			errMsgRegex.enumerateMatches( in: lnText ,options: []
+				,range: NSRange( location: 0, length: lnText.characters.count ) )
+			{ //closure or match handler
+				(macth, _, stop) in  
+				
+				fsmState = CompileIssue.FsmStates.gotErrMsg 
+				
+			}
+		default: break
+	} //switch
+}
 
 // print("xyz: \(xyz)")
 // _dbx("xyz: \(xyz)")
